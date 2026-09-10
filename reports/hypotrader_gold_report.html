@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>HypoTrader Report | HYPO-GOLD-001</title>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --panel: #161b22;
+            --border: #30363d;
+            --text: #c9d1d9;
+            --accent: #58a6ff;
+            --green: #3fb950;
+            --red: #f85149;
+            --gold: #d29922;
+        }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 30px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 30px; }
+        .header h1 { color: #ffffff; margin: 0 0 10px 0; font-size: 26px; }
+        .badge { background: #238636; color: #fff; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; text-transform: uppercase; }
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 30px; }
+        .kpi-card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 18px; text-align: center; }
+        .kpi-title { font-size: 12px; color: #8b949e; text-transform: uppercase; margin-bottom: 8px; }
+        .kpi-val { font-size: 24px; font-weight: 700; color: #fff; }
+        .kpi-val.pos { color: var(--green); }
+        .kpi-val.neg { color: var(--red); }
+        .section { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 24px; margin-bottom: 30px; }
+        .section h2 { color: #ffffff; font-size: 18px; margin-top: 0; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: #8b949e; font-weight: 600; }
+        .pos { color: var(--green); }
+        .neg { color: var(--red); }
+        .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+        .flip-badge { background: #8957e5; color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; }
+        .text-muted { color: #6e7681; }
+        .chart-box { width: 100%; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <span class="badge">HypoTrader Institutional Lab</span>
+            <h1>Gold Mid-day Sydney-to-IST Range Fade & Reversal Flip</h1>
+            <div style="color: #8b949e; font-size: 14px;">
+                Hypothesis ID: <strong>HYPO-GOLD-001</strong> | Asset: <strong>XAUUSD (Gold)</strong> | Execution: <strong>IC Markets Raw ECN</strong>
+            </div>
+        </div>
+
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-title">Total Net Return</div>
+                <div class="kpi-val neg">-0.48%</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-title">Total Net PnL</div>
+                <div class="kpi-val neg">$-237.50</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-title">Sharpe Ratio</div>
+                <div class="kpi-val">-0.27</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-title">Sortino Ratio</div>
+                <div class="kpi-val">-0.21</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-title">Max Drawdown</div>
+                <div class="kpi-val neg">-1.11%</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-title">Win Rate</div>
+                <div class="kpi-val">30.4%</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Compounded Equity Curve & Performance Trajectory</h2>
+            <div class="chart-box">
+                
+        <svg viewBox="0 0 1100 260" style="width: 100%; height: auto;">
+            <rect width="1100" height="260" fill="#161b22" rx="6" />
+            <!-- Baseline -->
+            <line x1="40" y1="230" x2="1060" y2="230" stroke="#30363d" stroke-width="1" />
+            <!-- Area fill -->
+            <polygon points="40,230 40.0,122.8 86.4,58.8 132.7,125.5 179.1,192.2 225.5,128.2 271.8,94.0 318.2,30.0 364.5,30.0 410.9,96.7 457.3,163.3 503.6,230.0 550.0,195.8 596.4,131.8 642.7,168.7 689.1,104.8 735.5,141.7 781.8,141.7 828.2,141.7 874.5,141.7 920.9,141.7 967.3,141.7 1013.6,141.7 1060.0,141.7 1060,230" fill="rgba(88, 166, 255, 0.12)" />
+            <!-- Line -->
+            <polyline points="40.0,122.8 86.4,58.8 132.7,125.5 179.1,192.2 225.5,128.2 271.8,94.0 318.2,30.0 364.5,30.0 410.9,96.7 457.3,163.3 503.6,230.0 550.0,195.8 596.4,131.8 642.7,168.7 689.1,104.8 735.5,141.7 781.8,141.7 828.2,141.7 874.5,141.7 920.9,141.7 967.3,141.7 1013.6,141.7 1060.0,141.7" fill="none" stroke="#58a6ff" stroke-width="2.5" />
+            <!-- Labels -->
+            <text x="40" y="20" fill="#8b949e" font-size="11" font-family="monospace">$50,072.50</text>
+            <text x="40" y="250" fill="#8b949e" font-size="11" font-family="monospace">$49,517.50</text>
+        </svg>
+        
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Monthly Returns Heatmap (%)</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Year</th>
+                        <th>Jan</th><th>Feb</th><th>Mar</th><th>Apr</th><th>May</th><th>Jun</th>
+                        <th>Jul</th><th>Aug</th><th>Sep</th><th>Oct</th><th>Nov</th><th>Dec</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td><strong>2024</strong></td><td style='color:#555;'>—</td><td style='color:#555;'>—</td><td style='color:#555;'>—</td><td style='color:#555;'>—</td><td class='pos font-mono'>+0.30%</td><td style='color:#555;'>—</td><td style='color:#555;'>—</td><td style='color:#555;'>—</td><td style='color:#555;'>—</td><td style='color:#555;'>—</td><td style='color:#555;'>—</td><td style='color:#555;'>—</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2>Recent Chained Sequences & SL-Flip Execution Log</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Chain ID</th>
+                        <th>Evaluation Time</th>
+                        <th>Leg 1 (Sydney Range Fade)</th>
+                        <th>Leg 2 (Contingent Reversal Flip)</th>
+                        <th>Chain Net PnL</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+            <tr>
+                <td><strong>CHAIN-20240415</strong></td>
+                <td>2024-04-15 07:00</td>
+                <td>LONG @ $2350.24 &rarr; $2340.20 (SL) [$-102.50]</td>
+                <td><span class='flip-badge'>FLIP</span> SHORT @ $2340.20 &rarr; $2348.24 (SL) [$-82.50]</td>
+                <td class='neg font-mono'><strong>$-185.00</strong></td>
+            </tr>
+            
+            <tr>
+                <td><strong>CHAIN-20240416</strong></td>
+                <td>2024-04-16 07:00</td>
+                <td>LONG @ $2372.09 &rarr; $2390.06 (TP) [$+177.50]</td>
+                <td><span class='text-muted'>No Flip</span></td>
+                <td class='pos font-mono'><strong>$+177.50</strong></td>
+            </tr>
+            
+            <tr>
+                <td><strong>CHAIN-20240417</strong></td>
+                <td>2024-04-17 07:00</td>
+                <td>SHORT @ $2383.36 &rarr; $2393.39 (SL) [$-102.50]</td>
+                <td><span class='flip-badge'>FLIP</span> LONG @ $2393.39 &rarr; $2385.36 (SL) [$-82.50]</td>
+                <td class='neg font-mono'><strong>$-185.00</strong></td>
+            </tr>
+            
+            <tr>
+                <td><strong>CHAIN-20240418</strong></td>
+                <td>2024-04-18 07:00</td>
+                <td>SHORT @ $2379.39 &rarr; $2389.42 (SL) [$-102.50]</td>
+                <td><span class='flip-badge'>FLIP</span> LONG @ $2389.42 &rarr; $2381.39 (SL) [$-82.50]</td>
+                <td class='neg font-mono'><strong>$-185.00</strong></td>
+            </tr>
+            
+            <tr>
+                <td><strong>CHAIN-20240419</strong></td>
+                <td>2024-04-19 07:00</td>
+                <td>LONG @ $2377.18 &rarr; $2395.15 (TP) [$+177.50]</td>
+                <td><span class='text-muted'>No Flip</span></td>
+                <td class='pos font-mono'><strong>$+177.50</strong></td>
+            </tr>
+            
+            <tr>
+                <td><strong>CHAIN-20240422</strong></td>
+                <td>2024-04-22 07:00</td>
+                <td>LONG @ $2354.76 &rarr; $2344.73 (SL) [$-102.50]</td>
+                <td><span class='flip-badge'>FLIP</span> SHORT @ $2344.73 &rarr; $2324.76 (TP) [$+197.50]</td>
+                <td class='pos font-mono'><strong>$+95.00</strong></td>
+            </tr>
+            
+            <tr>
+                <td><strong>CHAIN-20240423</strong></td>
+                <td>2024-04-23 07:00</td>
+                <td>LONG @ $2298.91 &rarr; $2316.88 (TP) [$+177.50]</td>
+                <td><span class='text-muted'>No Flip</span></td>
+                <td class='pos font-mono'><strong>$+177.50</strong></td>
+            </tr>
+            
+            <tr>
+                <td><strong>CHAIN-20240424</strong></td>
+                <td>2024-04-24 07:00</td>
+                <td>—</td>
+                <td><span class='text-muted'>No Flip</span></td>
+                <td class='pos font-mono'><strong>$+0.00</strong></td>
+            </tr>
+            
+            <tr>
+                <td><strong>CHAIN-20240425</strong></td>
+                <td>2024-04-25 07:00</td>
+                <td>SHORT @ $2322.01 &rarr; $2332.04 (SL) [$-102.50]</td>
+                <td><span class='flip-badge'>FLIP</span> LONG @ $2332.04 &rarr; $2324.01 (SL) [$-82.50]</td>
+                <td class='neg font-mono'><strong>$-185.00</strong></td>
+            </tr>
+            
+            <tr>
+                <td><strong>CHAIN-20240426</strong></td>
+                <td>2024-04-26 07:00</td>
+                <td>SHORT @ $2341.00 &rarr; $2351.03 (SL) [$-102.50]</td>
+                <td><span class='flip-badge'>FLIP</span> LONG @ $2351.03 &rarr; $2343.00 (SL) [$-82.50]</td>
+                <td class='neg font-mono'><strong>$-185.00</strong></td>
+            </tr>
+            
+            <tr>
+                <td><strong>CHAIN-20240429</strong></td>
+                <td>2024-04-29 07:00</td>
+                <td>SHORT @ $2333.59 &rarr; $2343.62 (SL) [$-102.50]</td>
+                <td><span class='flip-badge'>FLIP</span> LONG @ $2343.62 &rarr; $2335.59 (SL) [$-82.50]</td>
+                <td class='neg font-mono'><strong>$-185.00</strong></td>
+            </tr>
+            
+            <tr>
+                <td><strong>CHAIN-20240430</strong></td>
+                <td>2024-04-30 07:00</td>
+                <td>LONG @ $2321.34 &rarr; $2311.31 (SL) [$-102.50]</td>
+                <td><span class='flip-badge'>FLIP</span> SHORT @ $2311.31 &rarr; $2291.34 (TP) [$+197.50]</td>
+                <td class='pos font-mono'><strong>$+95.00</strong></td>
+            </tr>
+            
+            <tr>
+                <td><strong>CHAIN-20240501</strong></td>
+                <td>2024-05-01 07:00</td>
+                <td>LONG @ $2285.01 &rarr; $2302.98 (TP) [$+177.50]</td>
+                <td><span class='text-muted'>No Flip</span></td>
+                <td class='pos font-mono'><strong>$+177.50</strong></td>
+            </tr>
+            
+            <tr>
+                <td><strong>CHAIN-20240502</strong></td>
+                <td>2024-05-02 07:00</td>
+                <td>LONG @ $2313.57 &rarr; $2303.53 (SL) [$-102.50]</td>
+                <td><span class='text-muted'>No Flip</span></td>
+                <td class='neg font-mono'><strong>$-102.50</strong></td>
+            </tr>
+            
+            <tr>
+                <td><strong>CHAIN-20240503</strong></td>
+                <td>2024-05-03 07:00</td>
+                <td>LONG @ $2299.32 &rarr; $2317.29 (TP) [$+177.50]</td>
+                <td><span class='text-muted'>No Flip</span></td>
+                <td class='pos font-mono'><strong>$+177.50</strong></td>
+            </tr>
+            
+            <tr>
+                <td><strong>CHAIN-20240506</strong></td>
+                <td>2024-05-06 07:00</td>
+                <td>SHORT @ $2313.99 &rarr; $2324.02 (SL) [$-102.50]</td>
+                <td><span class='text-muted'>No Flip</span></td>
+                <td class='neg font-mono'><strong>$-102.50</strong></td>
+            </tr>
+            
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>
