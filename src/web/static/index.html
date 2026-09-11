@@ -2947,8 +2947,8 @@
                             const yCtc = getY(s2L.ctc_price);
 
                             // Initial SL to ctcX
-                            svg += `<line x1="${x1230}" y1="${yS2SlInitial}" x2="${ctcX}" y2="${yS2SlInitial}" stroke="#f85149" stroke-width="1.8"/>`;
-                            svg += `<text x="${x1230 + 10}" y="${yS2SlInitial + (s2DirUp ? 13 : -6)}" font-size="9" fill="#f85149">[S2] SL1 ${(s2L.initial_sl_price || s2L.sl_price).toFixed(1)}</text>`;
+                            svg += `<line x1="${xS2Start}" y1="${yS2SlInitial}" x2="${ctcX}" y2="${yS2SlInitial}" stroke="#f85149" stroke-width="1.8"/>`;
+                            svg += `<text x="${xS2Start + 10}" y="${yS2SlInitial + (s2DirUp ? 13 : -6)}" font-size="9" fill="#f85149">[S2] SL1 ${(s2L.initial_sl_price || s2L.sl_price).toFixed(1)}</text>`;
 
                             // Stepped transition at ctcX down/up to entry (BE)
                             svg += `<line x1="${ctcX}" y1="${yS2SlInitial}" x2="${ctcX}" y2="${yS2Entry}" stroke="#bc8cff" stroke-width="1.5" stroke-dasharray="3 2"/>`;
@@ -2959,8 +2959,8 @@
                             svg += `<line x1="${ctcX}" y1="${yS2Entry}" x2="${xS2Exit}" y2="${yS2Entry}" stroke="#f85149" stroke-width="1.8"/>`;
                             svg += `<text x="${ctcX + 8}" y="${yS2Entry - 7}" font-size="9" fill="#8b949e">[S2] SL1&rarr;BE (${s2L.entry_price.toFixed(1)})</text>`;
                         } else {
-                            svg += `<line x1="${x1230}" y1="${yS2SlInitial}" x2="${xS2Exit}" y2="${yS2SlInitial}" stroke="#f85149" stroke-width="1.8"/>`;
-                            svg += `<text x="${x1230 + 10}" y="${yS2SlInitial + (s2DirUp ? 13 : -6)}" font-size="9" fill="#f85149">[S2] SL1 ${(s2L.initial_sl_price || s2L.sl_price).toFixed(1)}</text>`;
+                            svg += `<line x1="${xS2Start}" y1="${yS2SlInitial}" x2="${xS2Exit}" y2="${yS2SlInitial}" stroke="#f85149" stroke-width="1.8"/>`;
+                            svg += `<text x="${xS2Start + 10}" y="${yS2SlInitial + (s2DirUp ? 13 : -6)}" font-size="9" fill="#f85149">[S2] SL1 ${(s2L.initial_sl_price || s2L.sl_price).toFixed(1)}</text>`;
                         }
 
                         // S2 Leg 1 Outcome Marker
@@ -3514,9 +3514,6 @@
                     const rawScope = typeof r.scope_points === "number" ? r.scope_points : (r.scope || 0);
                     const minX = backtestData.parameters ? backtestData.parameters.scope_min_x : 5.0;
                     let scopePts = rawScope.toFixed(1);
-                    if (isSkip && rawScope >= (minX - 0.09) && rawScope < minX) {
-                        scopePts = rawScope.toFixed(2);
-                    }
 
                     const scopeGateHtml = isSkip
                         ? `<span class="badge" style="background:rgba(210,153,34,0.15);color:#d29922;border:1px solid #d29922;">🛑 ${scopePts} pts (&lt; ${minX})</span>`
@@ -3605,14 +3602,15 @@
                         const s2L2 = r.strat2.legs && r.strat2.legs.length > 1 ? r.strat2.legs[1] : null;
 
                         if (s2L1) {
+                            const isCtc = s2L1.exit_reason === "CTC" || s2L1.exit_reason === "BREAKEVEN";
                             const l1PnlVal = s2L1.pnl_net || 0;
                             const l1Pnl = l1PnlVal >= 0 ? "+$" + l1PnlVal.toFixed(1) : "-$" + Math.abs(l1PnlVal).toFixed(1);
-                            const l1Color = l1PnlVal > 0 ? "var(--green)" : (l1PnlVal < 0 ? "var(--red)" : "var(--text-muted)");
+                            const l1Color = isCtc ? "#bc8cff" : (l1PnlVal > 0 ? "var(--green)" : (l1PnlVal < 0 ? "var(--red)" : "var(--text-muted)"));
                             s2Html = `<strong>${s2L1.direction || '—'}</strong> ${s2L1.exit_reason} (<span style="color:${l1Color};">${l1Pnl}</span>)`;
                         } else if (r.strat2.day_type === "DECAY") {
-                            s2Html = `<strong>${r.strat2.direction || '—'}</strong> DECAY (<span style="color:var(--text-muted);">$0.0</span>)`;
+                            s2Html = `<span class="badge" style="background:rgba(210,153,34,0.15);color:#d29922;border:1px solid #d29922;">${r.strat2.direction || '—'} DECAY</span> (<span style="color:var(--text-muted);">$0.0</span>)`;
                         } else if (r.strat2.day_type === "EXPIRED") {
-                            s2Html = `<strong>${r.strat2.direction || '—'}</strong> EXPIRED (<span style="color:var(--text-muted);">$0.0</span>)`;
+                            s2Html = `<span class="badge" style="background:rgba(139,148,158,0.15);color:#8b949e;border:1px solid #8b949e;">${r.strat2.direction || '—'} EXPIRED</span> (<span style="color:var(--text-muted);">$0.0</span>)`;
                         } else if (r.strat2.day_type === "TIE") {
                             s2Html = `<span style="color:var(--text-muted);">TIE ($0.0)</span>`;
                         } else {
