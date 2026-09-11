@@ -11,6 +11,9 @@ from typing import Optional, Tuple, Literal
 
 from src.execution.simulator import FeeModel
 from src.sequencer.fsm import TradeChain, TradeLeg
+from src.execution.ambiguity_resolver import (
+    is_ambiguous_bar, resolve_ambiguity, Confidence
+)
 
 
 @dataclass(frozen=True)
@@ -33,10 +36,12 @@ class RangeSweepV2Simulator:
         fee_model: FeeModel | None = None,
         point_value: float = 1.0,
         config: RangeSweepV2SimConfig | None = None,
+        df_1m: Optional[pd.DataFrame] = None,
     ):
         self.fee_model = fee_model or FeeModel()
         self.point_value = point_value
         self.config = config or RangeSweepV2SimConfig()
+        self.df_1m = df_1m  # Optional 1-min data for ambiguity resolution
 
     def process_bar(
         self,
@@ -65,7 +70,7 @@ class RangeSweepV2Simulator:
             )
 
         self._maybe_arm_ctc(chain, leg, bar_time=bar_time, high_p=high_p, low_p=low_p)
-        return self._process_active_bar(chain, leg, bar_time, high_p, low_p)
+        return self._process_active_bar(chain, leg, bar_time, high_p, low_p, open_p=open_p, close_p=close_p)
 
     def _process_pending_bar(
         self,
@@ -115,18 +120,18 @@ class RangeSweepV2Simulator:
                 leg.is_pending = False
                 chain.record_event("LIMIT_FILLED", time=bar_time, price=leg.entry_price, depth=leg.depth)
                 self._maybe_arm_ctc(chain, leg, bar_time=bar_time, high_p=high_p, low_p=low_p)
-                return self._process_active_bar(chain, leg, bar_time, high_p, low_p)
+                return self._process_active_bar(chain, leg, bar_time, high_p, low_p, open_p=high_p, close_p=low_p)
         elif high_p >= leg.entry_price:
             leg.is_pending = False
             chain.record_event("LIMIT_FILLED", time=bar_time, price=leg.entry_price, depth=leg.depth)
             self._maybe_arm_ctc(chain, leg, bar_time=bar_time, high_p=high_p, low_p=low_p)
-            return self._process_active_bar(chain, leg, bar_time, high_p, low_p)
+            return self._process_active_bar(chain, leg, bar_time, high_p, low_p, open_p=high_p, close_p=low_p)
 
         return None
 
-    def _maybe_arm_ctc(self, chain: TradeChain, leg: TradeLeg, bar_time: dt.datetime, high_p: float, low_p: float) -> None:
+    def _maybe_arm_ctc(self, chain: TradeChain, leg: TradeLeg, bar_time: dt.datetime, high_p: float, low_p: float) -> bool:
         if leg.ctc_armed:
-            return
+            return True
 
         ctc_threshold = self.config.get_ctc_points(leg.depth)
         if ctc_threshold <= 0:
@@ -169,7 +174,75 @@ class RangeSweepV2Simulator:
         bar_time: dt.datetime,
         high_p: float,
         low_p: float,
+        open_p: float = 0.0,
+        close_p: float = 0.0,
     ) -> Optional[TradeLeg]:
+        ctc_threshold = self.config.get_ctc_points(leg.depth)
+
+        # Check for ambiguity
+        ambiguous, conflict_reasons = is_ambiguous_bar(
+            direction=leg.direction,
+            bar_high=high_p,
+            bar_low=low_p,
+            entry_price=leg.entry_price,
+            sl_price=leg.sl_price,
+            tp_price=leg.tp_price,
+            ctc_threshold=ctc_threshold,
+            ctc_armed=leg.ctc_armed,
+        )
+
+        if ambiguous:
+            resolution = resolve_ambiguity(
+                direction=leg.direction,
+                bar_open=open_p if open_p != 0.0 else high_p,
+                bar_high=high_p,
+                bar_low=low_p,
+                bar_close=close_p if close_p != 0.0 else low_p,
+                bar_time=bar_time,
+                entry_price=leg.entry_price,
+                sl_price=leg.sl_price,
+                tp_price=leg.tp_price,
+                ctc_threshold=ctc_threshold,
+                ctc_armed=leg.ctc_armed,
+                conflict_reasons=conflict_reasons,
+                df_1m=self.df_1m,
+            )
+
+            chain.confidence = resolution.tier.value
+            chain.ambiguity_reasons = conflict_reasons
+
+            if resolution.event_type == "TP_HIT":
+                fill = resolution.price - self.fee_model.base_slippage_pts if leg.direction == "LONG" else resolution.price + self.fee_model.base_slippage_pts
+                return self._close_leg(chain, leg, bar_time, fill, "TP")
+            elif resolution.event_type == "SL_HIT":
+                fill = leg.sl_price - self.fee_model.base_slippage_pts if leg.direction == "LONG" else leg.sl_price + self.fee_model.base_slippage_pts
+                return self._close_leg(chain, leg, bar_time, fill, "SL")
+            elif resolution.event_type == "CTC_SL_HIT":
+                fill = leg.entry_price - self.fee_model.base_slippage_pts if leg.direction == "LONG" else leg.entry_price + self.fee_model.base_slippage_pts
+                return self._close_leg(chain, leg, bar_time, fill, "CTC")
+            elif resolution.event_type == "CTC_ARM":
+                # CTC armed, trade survives
+                if not leg.ctc_armed:
+                    leg.ctc_armed = True
+                    leg.ctc_time = bar_time
+                    if leg.direction == "LONG":
+                        leg.ctc_price = leg.entry_price + ctc_threshold
+                    else:
+                        leg.ctc_price = leg.entry_price - ctc_threshold
+                    old_sl = leg.sl_price
+                    leg.sl_price = leg.entry_price
+                    chain.record_event(
+                        f"CTC_STEP_L{leg.depth}",
+                        time=bar_time,
+                        trigger_price=leg.ctc_price,
+                        old_sl=old_sl,
+                        new_sl=leg.sl_price,
+                        note=f"Ambiguity resolved ({resolution.tier.value}): CTC armed, trade survives",
+                    )
+            # SURVIVE: continue
+            return None
+
+        # No ambiguity — fast path
         exit_event: Optional[Tuple[Literal["TP", "SL", "CTC"], float]] = None
 
         if leg.direction == "LONG":

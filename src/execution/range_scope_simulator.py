@@ -15,6 +15,9 @@ import pandas as pd
 
 from src.execution.simulator import FeeModel
 from src.strategies.range_scope_v1 import RangeScopeSignal
+from src.execution.ambiguity_resolver import (
+    is_ambiguous_bar, resolve_ambiguity, load_1min_dataframe, Confidence
+)
 
 TZ_IST = ZoneInfo("Asia/Kolkata")
 TZ_UTC = ZoneInfo("UTC")
@@ -47,6 +50,8 @@ class RangeScopeTradeResult:
     fee_usd: float = 0.0
     pnl_net: float = 0.0
     is_open: bool = True
+    confidence: str = "RESOLVED"
+    ambiguity_reasons: Optional[List[str]] = None
     events: List[Dict[str, Any]] = None
 
     def __post_init__(self):
@@ -59,9 +64,11 @@ class RangeScopeSimulator:
         self,
         fee_model: FeeModel | None = None,
         point_value: float = 1.0,
+        df_1m: Optional[pd.DataFrame] = None,
     ):
         self.fee_model = fee_model or FeeModel()
         self.point_value = point_value
+        self.df_1m = df_1m  # Optional 1-min data for ambiguity resolution
 
     def simulate_day(
         self,
@@ -130,35 +137,6 @@ class RangeScopeSimulator:
             bar_close = float(row["close"])
 
             # -------------------------------------------------------------
-            # CTC (Cost-To-Cost) Arming Check
-            # -------------------------------------------------------------
-            if ctc_threshold > 0 and not trade.ctc_armed:
-                if signal.direction == "LONG":
-                    if bar_high >= trade.entry_price + ctc_threshold:
-                        trade.ctc_armed = True
-                        trade.ctc_time = bar_time
-                        trade.ctc_price = round(trade.entry_price + ctc_threshold, 3)
-                        trade.sl_price = trade.entry_price
-                        trade.events.append({
-                            "type": "CTC_ARMED",
-                            "time": bar_time,
-                            "price": trade.ctc_price,
-                            "note": f"+{ctc_threshold:.1f} pts reached -> SL stepped to Breakeven",
-                        })
-                elif signal.direction == "SHORT":
-                    if bar_low <= trade.entry_price - ctc_threshold:
-                        trade.ctc_armed = True
-                        trade.ctc_time = bar_time
-                        trade.ctc_price = round(trade.entry_price - ctc_threshold, 3)
-                        trade.sl_price = trade.entry_price
-                        trade.events.append({
-                            "type": "CTC_ARMED",
-                            "time": bar_time,
-                            "price": trade.ctc_price,
-                            "note": f"+{ctc_threshold:.1f} pts reached -> SL stepped to Breakeven",
-                        })
-
-            # -------------------------------------------------------------
             # At 12:30 PM IST: Evaluate Dynamic Take Profit
             # -------------------------------------------------------------
             if not tp_updated_at_1230 and bar_time >= time_1230_utc:
@@ -167,7 +145,7 @@ class RangeScopeSimulator:
                 trade.price_at_1230 = price_1230
 
                 if signal.tp_mode == "mode_2_wait_1230":
-                    # Mode 2: Recompute expanded range from session_start up to 12:30 (strictly prior bars + 12:30 open)
+                    # Mode 2: Recompute expanded range from session_start up to 12:30
                     mask_up_to_1230 = (day_df["_dt"] >= session_start_utc) & (day_df["_dt"] < bar_time)
                     bars_to_1230 = day_df.loc[mask_up_to_1230]
                     low_1230 = min(float(bars_to_1230["low"].min()), bar_open) if len(bars_to_1230) > 0 else bar_open
@@ -187,18 +165,16 @@ class RangeScopeSimulator:
                         current_tp = new_tp
 
                 else:
-                    # Mode 1 (default): Range low / high is from session range
+                    # Mode 1: Range low / high from session range
                     if signal.direction == "SHORT":
                         new_tp = min(signal.range_low + signal.tp_offset_y, price_1230)
                         trade.tp_at_1230 = new_tp
-                        # If price already dropped below/at range_low + y, immediate profit lock-in
                         if price_1230 <= signal.range_low + signal.tp_offset_y:
                             return self._close_trade(trade, bar_time, price_1230, "TP_1230_LOCKIN", "12:30 immediate profit lock-in exit")
                         current_tp = new_tp
                     else:  # LONG
                         new_tp = max(signal.range_high - signal.tp_offset_y, price_1230)
                         trade.tp_at_1230 = new_tp
-                        # If price already rose above/at range_high - y, immediate profit lock-in
                         if price_1230 >= signal.range_high - signal.tp_offset_y:
                             return self._close_trade(trade, bar_time, price_1230, "TP_1230_LOCKIN", "12:30 immediate profit lock-in exit")
                         current_tp = new_tp
@@ -214,26 +190,116 @@ class RangeScopeSimulator:
 
             # -------------------------------------------------------------
             # Intrabar Execution Checks (SL, CTC, and active TP)
+            # Uses 3-tier ambiguity resolution for conflicting events.
+            #
+            # IMPORTANT: CTC arming is NOT done before this check.
+            # The ambiguity resolver needs to see the pre-CTC state to detect
+            # CTC+SL conflicts. CTC is armed INSIDE the resolver (ambiguous path)
+            # or AFTER SL/TP checks (non-ambiguous fast path).
             # -------------------------------------------------------------
-            if signal.direction == "SHORT":
-                # Check Stop Loss / CTC Breakeven
-                if bar_high >= trade.sl_price:
-                    if trade.ctc_armed and abs(trade.sl_price - trade.entry_price) < 1e-4:
-                        return self._close_trade(trade, bar_time, trade.entry_price, "CTC", "CTC-SL hit at breakeven (0 pts loss)")
-                    return self._close_trade(trade, bar_time, trade.sl_price, "SL", "Stop loss hit")
-                # Check Take Profit
-                if current_tp is not None and bar_low <= current_tp:
-                    return self._close_trade(trade, bar_time, current_tp, "TP", "Take profit hit")
 
-            elif signal.direction == "LONG":
-                # Check Stop Loss / CTC Breakeven
-                if bar_low <= trade.sl_price:
-                    if trade.ctc_armed and abs(trade.sl_price - trade.entry_price) < 1e-4:
-                        return self._close_trade(trade, bar_time, trade.entry_price, "CTC", "CTC-SL hit at breakeven (0 pts loss)")
-                    return self._close_trade(trade, bar_time, trade.sl_price, "SL", "Stop loss hit")
-                # Check Take Profit
-                if current_tp is not None and bar_high >= current_tp:
-                    return self._close_trade(trade, bar_time, current_tp, "TP", "Take profit hit")
+            # Check for ambiguity BEFORE arming CTC
+            ambiguous, conflict_reasons = is_ambiguous_bar(
+                direction=signal.direction,
+                bar_high=bar_high,
+                bar_low=bar_low,
+                entry_price=trade.entry_price,
+                sl_price=trade.sl_price,
+                tp_price=current_tp,
+                ctc_threshold=ctc_threshold,
+                ctc_armed=trade.ctc_armed,
+            )
+
+            if ambiguous:
+                # Resolve using the 3-tier cascade
+                resolution = resolve_ambiguity(
+                    direction=signal.direction,
+                    bar_open=bar_open,
+                    bar_high=bar_high,
+                    bar_low=bar_low,
+                    bar_close=bar_close,
+                    bar_time=bar_time,
+                    entry_price=trade.entry_price,
+                    sl_price=trade.sl_price,
+                    tp_price=current_tp,
+                    ctc_threshold=ctc_threshold,
+                    ctc_armed=trade.ctc_armed,
+                    conflict_reasons=conflict_reasons,
+                    df_1m=self.df_1m,
+                )
+
+                trade.confidence = resolution.tier.value
+                trade.ambiguity_reasons = conflict_reasons
+
+                if resolution.event_type == "TP_HIT":
+                    return self._close_trade(trade, bar_time, resolution.price, "TP",
+                        f"Take profit hit (resolved: {resolution.tier.value})")
+                elif resolution.event_type == "SL_HIT":
+                    return self._close_trade(trade, bar_time, resolution.price, "SL",
+                        f"Stop loss hit (resolved: {resolution.tier.value})")
+                elif resolution.event_type == "CTC_SL_HIT":
+                    return self._close_trade(trade, bar_time, trade.entry_price, "CTC",
+                        f"CTC-SL hit at breakeven (resolved: {resolution.tier.value})")
+                elif resolution.event_type == "CTC_ARM":
+                    # CTC armed but trade survives — update state and continue
+                    if not trade.ctc_armed:
+                        trade.ctc_armed = True
+                        trade.ctc_time = bar_time
+                        if signal.direction == "LONG":
+                            trade.ctc_price = round(trade.entry_price + ctc_threshold, 3)
+                        else:
+                            trade.ctc_price = round(trade.entry_price - ctc_threshold, 3)
+                        trade.sl_price = trade.entry_price
+                        trade.events.append({
+                            "type": "CTC_ARMED",
+                            "time": bar_time,
+                            "price": trade.ctc_price,
+                            "note": f"+{ctc_threshold:.1f} pts reached -> SL stepped to Breakeven (resolved: {resolution.tier.value})",
+                        })
+                # SURVIVE: trade continues to next bar
+            else:
+                # No ambiguity — fast path
+                # 1. CTC arming (safe because no SL/TP conflict exists)
+                if ctc_threshold > 0 and not trade.ctc_armed:
+                    if signal.direction == "LONG" and bar_high >= trade.entry_price + ctc_threshold:
+                        trade.ctc_armed = True
+                        trade.ctc_time = bar_time
+                        trade.ctc_price = round(trade.entry_price + ctc_threshold, 3)
+                        trade.sl_price = trade.entry_price
+                        trade.events.append({
+                            "type": "CTC_ARMED",
+                            "time": bar_time,
+                            "price": trade.ctc_price,
+                            "note": f"+{ctc_threshold:.1f} pts reached -> SL stepped to Breakeven",
+                        })
+                    elif signal.direction == "SHORT" and bar_low <= trade.entry_price - ctc_threshold:
+                        trade.ctc_armed = True
+                        trade.ctc_time = bar_time
+                        trade.ctc_price = round(trade.entry_price - ctc_threshold, 3)
+                        trade.sl_price = trade.entry_price
+                        trade.events.append({
+                            "type": "CTC_ARMED",
+                            "time": bar_time,
+                            "price": trade.ctc_price,
+                            "note": f"+{ctc_threshold:.1f} pts reached -> SL stepped to Breakeven",
+                        })
+
+                # 2. SL check
+                if signal.direction == "SHORT":
+                    if bar_high >= trade.sl_price:
+                        if trade.ctc_armed and abs(trade.sl_price - trade.entry_price) < 1e-4:
+                            return self._close_trade(trade, bar_time, trade.entry_price, "CTC", "CTC-SL hit at breakeven (0 pts loss)")
+                        return self._close_trade(trade, bar_time, trade.sl_price, "SL", "Stop loss hit")
+                    if current_tp is not None and bar_low <= current_tp:
+                        return self._close_trade(trade, bar_time, current_tp, "TP", "Take profit hit")
+
+                elif signal.direction == "LONG":
+                    if bar_low <= trade.sl_price:
+                        if trade.ctc_armed and abs(trade.sl_price - trade.entry_price) < 1e-4:
+                            return self._close_trade(trade, bar_time, trade.entry_price, "CTC", "CTC-SL hit at breakeven (0 pts loss)")
+                        return self._close_trade(trade, bar_time, trade.sl_price, "SL", "Stop loss hit")
+                    if current_tp is not None and bar_high >= current_tp:
+                        return self._close_trade(trade, bar_time, current_tp, "TP", "Take profit hit")
 
             # EOD check
             if bar_time >= signal.eod_utc:

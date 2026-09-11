@@ -108,6 +108,8 @@ class TradeChain:
         self.legs: List[TradeLeg] = []
         self.events: List[Dict[str, Any]] = []
         self.computed_context: Dict[str, Any] = {}
+        self.confidence: str = "RESOLVED"
+        self.ambiguity_reasons: Optional[List[str]] = None
 
     def record_event(self, event_type: str, *args, **kwargs) -> None:
         """Records a timestamped lifecycle event into the chain's event journal."""
