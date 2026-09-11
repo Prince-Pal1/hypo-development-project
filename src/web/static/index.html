@@ -3460,6 +3460,15 @@
             }
 
             // Render Table Body
+            const getOutcomeColor = (exitReason, pnlNet) => {
+                if (exitReason === "CTC" || exitReason === "BREAKEVEN") return "#bc8cff";
+                if (exitReason === "DECAY") return "var(--amber)";
+                if (exitReason === "EXPIRED") return "var(--text-muted)";
+                if (pnlNet > 0) return "var(--green)";
+                if (pnlNet < 0) return "var(--red)";
+                return "var(--text-muted)";
+            };
+
             tbody.innerHTML = "";
             records.forEach((r, idx) => {
                 if (r.day_type === "INSUFFICIENT_DATA") return;
@@ -3482,12 +3491,12 @@
                     let l1Html = "—";
                     if (l1) {
                         const l1Pnl = (l1.pnl_net || 0) >= 0 ? "+$" + l1.pnl_net.toFixed(1) : "-$" + Math.abs(l1.pnl_net).toFixed(1);
-                        const l1Color = (l1.pnl_net || 0) > 0 ? "var(--green)" : ((l1.pnl_net || 0) < 0 ? "var(--red)" : "var(--amber)");
+                        const l1Color = getOutcomeColor(l1.exit_reason, l1.pnl_net || 0);
                         l1Html = `<strong>${l1.exit_reason || "OPEN"}</strong> &bull; Exit: $${l1.exit_price ? l1.exit_price.toFixed(1) : '—'} (<span style="color:${l1Color};">${l1Pnl}</span>)`;
                     } else if (r.day_type === "DECAY") {
-                        l1Html = `<span style="color:var(--amber);">Decay Cancel (+15 pts trigger)</span>`;
+                        l1Html = `<span class="badge" style="background:rgba(210,153,34,0.15);color:#d29922;border:1px solid #d29922;">DECAY</span> (<span style="color:var(--text-muted);">$0.0</span>)`;
                     } else if (r.day_type === "EXPIRED") {
-                        l1Html = `<span style="color:var(--text-muted);">Expired @ 17:00 IST cutoff</span>`;
+                        l1Html = `<span class="badge" style="background:rgba(139,148,158,0.15);color:#8b949e;border:1px solid #8b949e;">EXPIRED</span> (<span style="color:var(--text-muted);">$0.0</span>)`;
                     } else if (r.day_type === "TIE") {
                         l1Html = `<span style="color:var(--text-muted);">Proximity Tie (No Trade)</span>`;
                     }
@@ -3495,7 +3504,7 @@
                     let l2Html = "—";
                     if (l2) {
                         const l2Pnl = (l2.pnl_net || 0) >= 0 ? "+$" + l2.pnl_net.toFixed(1) : "-$" + Math.abs(l2.pnl_net).toFixed(1);
-                        const l2Color = (l2.pnl_net || 0) > 0 ? "var(--green)" : ((l2.pnl_net || 0) < 0 ? "var(--red)" : "var(--amber)");
+                        const l2Color = getOutcomeColor(l2.exit_reason, l2.pnl_net || 0);
                         l2Html = `<strong>${l2.direction} ${l2.exit_reason || "OPEN"}</strong> &bull; Exit: $${l2.exit_price ? l2.exit_price.toFixed(1) : '—'} (<span style="color:${l2Color};">${l2Pnl}</span>)`;
                     }
 
@@ -3559,9 +3568,8 @@
                     if (isSkip) {
                         outcomeHtml = `<span style="color:var(--text-muted);">Scope Gate Skipped &bull; 0 Risk</span>`;
                     } else if (l1) {
-                        const isCtc = l1.exit_reason === "CTC";
                         const l1Pnl = (l1.pnl_net || 0) >= 0 ? "+$" + l1.pnl_net.toFixed(1) : "-$" + Math.abs(l1.pnl_net).toFixed(1);
-                        const l1Color = isCtc ? "#bc8cff" : ((l1.pnl_net || 0) > 0 ? "var(--green)" : ((l1.pnl_net || 0) < 0 ? "var(--red)" : "var(--amber)"));
+                        const l1Color = getOutcomeColor(l1.exit_reason, l1.pnl_net || 0);
                         outcomeHtml = `<strong>${l1.exit_reason}</strong> &bull; Exit: $${l1.exit_price ? l1.exit_price.toFixed(1) : '—'} (<span style="color:${l1Color};">${l1Pnl}</span>)`;
                     }
 
@@ -3586,13 +3594,13 @@
                         const s1Leg = r.strat1.legs && r.strat1.legs.length > 0 ? r.strat1.legs[0] : null;
                         const s1PnlVal = s1Leg ? (s1Leg.pnl_net || 0) : (r.strat1.pnl_net || 0);
                         const s1Pnl = s1PnlVal >= 0 ? "+$" + s1PnlVal.toFixed(1) : "-$" + Math.abs(s1PnlVal).toFixed(1);
-                        const isS1Ctc = s1Leg && s1Leg.exit_reason === "CTC";
-                        const s1Color = isS1Ctc ? "#bc8cff" : (s1PnlVal > 0 ? "var(--green)" : (s1PnlVal < 0 ? "var(--red)" : "var(--text-muted)"));
                         if (r.strat1.day_type === "SKIP") {
                             s1Html = `<span style="color:var(--text-muted);">SKIP ($0.0)</span>`;
                         } else if (s1Leg) {
+                            const s1Color = getOutcomeColor(s1Leg.exit_reason, s1PnlVal);
                             s1Html = `<strong>${s1Leg.direction || '—'}</strong> ${s1Leg.exit_reason} (<span style="color:${s1Color};">${s1Pnl}</span>)`;
                         } else {
+                            const s1Color = getOutcomeColor(r.strat1.day_type, s1PnlVal);
                             s1Html = `<strong>${r.strat1.direction || '—'}</strong> ${r.strat1.day_type} (<span style="color:${s1Color};">${s1Pnl}</span>)`;
                         }
                     }
@@ -3602,10 +3610,9 @@
                         const s2L2 = r.strat2.legs && r.strat2.legs.length > 1 ? r.strat2.legs[1] : null;
 
                         if (s2L1) {
-                            const isCtc = s2L1.exit_reason === "CTC" || s2L1.exit_reason === "BREAKEVEN";
                             const l1PnlVal = s2L1.pnl_net || 0;
                             const l1Pnl = l1PnlVal >= 0 ? "+$" + l1PnlVal.toFixed(1) : "-$" + Math.abs(l1PnlVal).toFixed(1);
-                            const l1Color = isCtc ? "#bc8cff" : (l1PnlVal > 0 ? "var(--green)" : (l1PnlVal < 0 ? "var(--red)" : "var(--text-muted)"));
+                            const l1Color = getOutcomeColor(s2L1.exit_reason, l1PnlVal);
                             s2Html = `<strong>${s2L1.direction || '—'}</strong> ${s2L1.exit_reason} (<span style="color:${l1Color};">${l1Pnl}</span>)`;
                         } else if (r.strat2.day_type === "DECAY") {
                             s2Html = `<span class="badge" style="background:rgba(210,153,34,0.15);color:#d29922;border:1px solid #d29922;">${r.strat2.direction || '—'} DECAY</span> (<span style="color:var(--text-muted);">$0.0</span>)`;
@@ -3615,14 +3622,14 @@
                             s2Html = `<span style="color:var(--text-muted);">TIE ($0.0)</span>`;
                         } else {
                             const s2Pnl = (r.strat2.pnl_net || 0) >= 0 ? "+$" + r.strat2.pnl_net.toFixed(1) : "-$" + Math.abs(r.strat2.pnl_net).toFixed(1);
-                            const s2Color = (r.strat2.pnl_net || 0) > 0 ? "var(--green)" : ((r.strat2.pnl_net || 0) < 0 ? "var(--red)" : "var(--text-muted)");
+                            const s2Color = getOutcomeColor(r.strat2.day_type, r.strat2.pnl_net || 0);
                             s2Html = `<strong>${r.strat2.direction || '—'}</strong> ${r.strat2.day_type} (<span style="color:${s2Color};">${s2Pnl}</span>)`;
                         }
 
                         if (s2L2) {
                             const l2PnlVal = s2L2.pnl_net || 0;
                             const l2Pnl = l2PnlVal >= 0 ? "+$" + l2PnlVal.toFixed(1) : "-$" + Math.abs(l2PnlVal).toFixed(1);
-                            const l2Color = l2PnlVal > 0 ? "var(--green)" : (l2PnlVal < 0 ? "var(--red)" : "var(--text-muted)");
+                            const l2Color = getOutcomeColor(s2L2.exit_reason, l2PnlVal);
                             s2L2Html = `<strong>Flip ${s2L2.direction}</strong> ${s2L2.exit_reason} (<span style="color:${l2Color};">${l2Pnl}</span>)`;
                         }
                     }

@@ -8,6 +8,7 @@ SL-flip on initial SL only (not CTC), and EOD forced exit.
 from dataclasses import dataclass
 import datetime as dt
 from typing import Optional, Tuple, Literal
+import pandas as pd
 
 from src.execution.simulator import FeeModel
 from src.sequencer.fsm import TradeChain, TradeLeg
