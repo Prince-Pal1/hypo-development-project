@@ -6,6 +6,7 @@ Serves the interactive strategy dashboard and handles REST API requests to run b
 import http.server
 import json
 from pathlib import Path
+import sqlite3
 import socketserver
 import sys
 import urllib.parse
@@ -59,6 +60,83 @@ class BacktestHandler(http.server.BaseHTTPRequestHandler):
                 return
             else:
                 self.send_error(404, "index.html not found")
+                return
+        elif path in ("/reports", "/reports.html"):
+            report_file = STATIC_DIR / "reports.html"
+            if report_file.exists():
+                content = report_file.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+                return
+            else:
+                self.send_error(404, "reports.html not found")
+                return
+        elif path in ("/observatory", "/observatory.html"):
+            obs_file = STATIC_DIR / "observatory.html"
+            if obs_file.exists():
+                content = obs_file.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+                return
+            else:
+                self.send_error(404, "observatory.html not found")
+                return
+
+        elif path == "/api/report_data":
+            report_path = PROJECT_ROOT / "hypotheses/adaptive_range_scope/regime_adaptive_report.md"
+            if report_path.exists():
+                self._send_json({"markdown": report_path.read_text(encoding='utf-8')})
+                return
+            else:
+                self.send_error(404, "Report markdown not found")
+                return
+                
+        elif path == "/api/observatory_data":
+            db_path = PROJECT_ROOT / "hypotrader.db"
+            if not db_path.exists():
+                self.send_error(404, "Database not found")
+                return
+                
+            try:
+                conn = sqlite3.connect(db_path)
+                query = "SELECT params_json, sharpe_ratio, annualized_return, trades_count as trade_count FROM optimizer_trials WHERE sharpe_ratio IS NOT NULL"
+                df = pd.read_sql_query(query, conn)
+                conn.close()
+                
+                # Unpack params_json
+                df_params = df['params_json'].apply(lambda x: json.loads(x) if x else {})
+                for col in ['sl_points', 'tp_offset_y', 'ctc_points', 'scope_min_x', 'tp_mode']:
+                    df[col] = df_params.apply(lambda p: p.get(col, None))
+                
+                # Drop params_json to save bandwidth
+                df = df.drop(columns=['params_json'])
+                
+                data = df.to_dict(orient='records')
+                self._send_json(data)
+                return
+            except Exception as e:
+                self.send_error(500, f"Error processing observatory data: {str(e)}")
+                return
+
+        elif path.startswith("/hypotheses/"):
+            file_path = PROJECT_ROOT / path.lstrip("/")
+            if file_path.exists() and file_path.is_file():
+                content = file_path.read_bytes()
+                content_type = "image/png" if path.endswith(".png") else "text/plain"
+                self.send_response(200)
+                self.send_header("Content-Type", content_type)
+                self.send_header("Content-Length", str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+                return
+            else:
+                self.send_error(404, "Hypothesis asset not found")
                 return
 
         elif path == "/api/config":

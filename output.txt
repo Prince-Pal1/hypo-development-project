@@ -1,45 +1,204 @@
-===============================================================================================
-HYPOTRADER: STRATEGY 1 — RANGE SCOPE (11:00 IST) — 2026-08-04 TO 2026-09-07
-Dataset : /Users/prince/algo-trading/data/historical/XAUUSD_5m.parquet
-Config  : Session: SYDNEY | Eval: 11:00 IST | Scope X: 5.0 pts | SL: 10.0 pts | CTC: 10.0 pts | TP Offset Y: 3.5 pts | Mode: mode_1_dynamic | Units: 10.0 | zero_fees: False
-===============================================================================================
+=== Walk-Forward Validation: Static vs Adaptive vs Oracle ===
+Total isolated training windows to evaluate: 62
+Evaluating Window 0 (2024-09-10 to 2024-09-20)...
+Evaluating Window 1 (2024-09-22 to 2024-10-02)...
+Evaluating Window 2 (2024-10-03 to 2024-10-14)...
+Evaluating Window 3 (2024-10-15 to 2024-10-25)...
+Evaluating Window 4 (2024-10-27 to 2024-11-06)...
+Evaluating Window 5 (2024-11-07 to 2024-11-18)...
+Evaluating Window 6 (2024-11-19 to 2024-11-29)...
+Evaluating Window 7 (2024-12-01 to 2024-12-11)...
+Evaluating Window 8 (2024-12-12 to 2024-12-23)...
+Evaluating Window 9 (2024-12-24 to 2025-01-03)...
+Evaluating Window 10 (2025-01-05 to 2025-01-15)...
+Evaluating Window 11 (2025-01-16 to 2025-01-27)...
+Evaluating Window 12 (2025-01-28 to 2025-02-07)...
+Evaluating Window 13 (2025-02-09 to 2025-02-19)...
+Evaluating Window 14 (2025-02-20 to 2025-03-03)...
+Evaluating Window 15 (2025-03-04 to 2025-03-14)...
+Evaluating Window 16 (2025-03-16 to 2025-03-26)...
+Evaluating Window 17 (2025-03-27 to 2025-04-07)...
+Evaluating Window 18 (2025-04-08 to 2025-04-20)...
+Evaluating Window 19 (2025-04-21 to 2025-05-01)...
+Evaluating Window 20 (2025-05-02 to 2025-05-13)...
+Evaluating Window 21 (2025-05-14 to 2025-05-25)...
+Evaluating Window 22 (2025-05-26 to 2025-06-05)...
+Evaluating Window 23 (2025-06-06 to 2025-06-17)...
+Evaluating Window 24 (2025-06-18 to 2025-06-29)...
+Evaluating Window 25 (2025-06-30 to 2025-07-10)...
+Evaluating Window 26 (2025-07-11 to 2025-07-22)...
+Evaluating Window 27 (2025-07-23 to 2025-08-03)...
+Evaluating Window 28 (2025-08-04 to 2025-08-14)...
+Evaluating Window 29 (2025-08-15 to 2025-08-26)...
+Evaluating Window 30 (2025-08-27 to 2025-09-07)...
+Evaluating Window 31 (2025-09-08 to 2025-09-18)...
+Evaluating Window 32 (2025-09-19 to 2025-09-30)...
+Evaluating Window 33 (2025-10-01 to 2025-10-12)...
+Evaluating Window 34 (2025-10-13 to 2025-10-23)...
+Evaluating Window 35 (2025-10-24 to 2025-11-04)...
+Evaluating Window 36 (2025-11-05 to 2025-11-16)...
+Evaluating Window 37 (2025-11-17 to 2025-11-27)...
+Evaluating Window 38 (2025-11-28 to 2025-12-09)...
+Evaluating Window 39 (2025-12-10 to 2025-12-21)...
+Evaluating Window 40 (2025-12-22 to 2026-01-01)...
+Evaluating Window 41 (2026-01-02 to 2026-01-13)...
+Evaluating Window 42 (2026-01-14 to 2026-01-25)...
+Evaluating Window 43 (2026-01-26 to 2026-02-05)...
+Evaluating Window 44 (2026-02-06 to 2026-02-17)...
+Evaluating Window 45 (2026-02-18 to 2026-03-01)...
+Evaluating Window 46 (2026-03-02 to 2026-03-12)...
+Evaluating Window 47 (2026-03-13 to 2026-03-24)...
+Evaluating Window 48 (2026-03-25 to 2026-04-06)...
+Evaluating Window 49 (2026-04-07 to 2026-04-17)...
+Evaluating Window 50 (2026-04-19 to 2026-04-29)...
+Evaluating Window 51 (2026-04-30 to 2026-05-11)...
+Evaluating Window 52 (2026-05-12 to 2026-05-22)...
+Evaluating Window 53 (2026-05-24 to 2026-06-03)...
+Evaluating Window 54 (2026-06-04 to 2026-06-15)...
+Evaluating Window 55 (2026-06-16 to 2026-06-26)...
+Evaluating Window 56 (2026-06-28 to 2026-07-08)...
+Evaluating Window 57 (2026-07-09 to 2026-07-20)...
+Evaluating Window 58 (2026-07-21 to 2026-07-31)...
+Evaluating Window 59 (2026-08-02 to 2026-08-12)...
+Evaluating Window 60 (2026-08-13 to 2026-08-24)...
+Evaluating Window 61 (2026-08-25 to 2026-09-04)...
+Selecting λ via nested cross-validation...
+Nested CV Lambda scores: {0.0: 0.0, 0.5: 0.0, 1.0: 0.0, 2.0: 0.0, 5.0: 0.0, 10.0: 0.0}
+Selected λ: 0.0
+WARNING: Sample Size. With ~16-17 windows total, the sample is extremely thin.
+Fitting a discrete HMM or clustered policy to this will suffer high variance.
+Defaulting to the CV-optimal regularized policy to minimize regime whip-sawing.
+Static Baseline Params (from W0): {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
 
----------------------------------------------------------------------------------------------------------
-Date         | Bias   | Scope   | Status          | Entry    | Exit     | Net PnL ($)  | Equity ($)
----------------------------------------------------------------------------------------------------------
-2026-08-04   | LONG   |    5.8p | TP              |  4063.2 |  4065.5 |    +20.50 | $50,020.50
-2026-08-05   | SKIP   |    2.5p | SKIP (insufficient_scope) |     --- |     --- |      0.00 | $50,020.50
-2026-08-06   | SHORT  |    8.5p | SL              |  4253.8 |  4263.8 |   -102.20 | $49,918.30
-2026-08-07   | LONG   |    5.0p | TP              |  4266.2 |  4271.2 |    +47.50 | $49,965.80
-2026-08-10   | LONG   |   18.5p | TP              |  4333.4 |  4351.9 |   +182.50 | $50,148.30
-2026-08-11   | SHORT  |    6.3p | TP              |  4391.9 |  4385.5 |    +61.30 | $50,209.60
-2026-08-12   | LONG   |   23.8p | TP              |  4391.7 |  4411.9 |   +200.40 | $50,410.00
-2026-08-13   | SHORT  |   15.1p | TP              |  4406.5 |  4391.4 |   +148.80 | $50,558.80
-2026-08-14   | SHORT  |    7.5p | SL              |  4317.9 |  4327.9 |   -102.20 | $50,456.60
-2026-08-17   | LONG   |   17.4p | CTC             |  4398.8 |  4398.8 |     -2.20 | $50,454.40
-2026-08-18   | SKIP   |    2.6p | SKIP (insufficient_scope) |     --- |     --- |      0.00 | $50,454.40
-2026-08-19   | LONG   |   16.7p | SL              |  4345.1 |  4335.1 |   -102.20 | $50,352.20
-2026-08-20   | SKIP   |    0.1p | SKIP (insufficient_scope) |     --- |     --- |      0.00 | $50,352.20
-2026-08-21   | LONG   |   17.9p | TP              |  4530.0 |  4547.9 |   +176.30 | $50,528.50
-2026-08-24   | LONG   |   21.0p | TP              |  4635.8 |  4656.8 |   +207.70 | $50,736.20
-2026-08-25   | SHORT  |   29.2p | CTC             |  4646.0 |  4646.0 |     -2.20 | $50,734.00
-2026-08-26   | SHORT  |   13.8p | TP              |  4643.0 |  4629.2 |   +135.30 | $50,869.30
-2026-08-27   | SHORT  |   22.9p | TP              |  4616.9 |  4597.4 |   +191.90 | $51,061.20
-2026-08-28   | SHORT  |    9.0p | TP              |  4583.6 |  4574.6 |    +87.80 | $51,149.00
-2026-08-31   | LONG   |   31.7p | SL              |  4440.1 |  4430.1 |   -102.20 | $51,046.80
-2026-09-01   | SKIP   |    1.3p | SKIP (insufficient_scope) |     --- |     --- |      0.00 | $51,046.80
-2026-09-02   | LONG   |   23.0p | CTC             |  4312.7 |  4312.7 |     -2.20 | $51,044.60
-2026-09-03   | LONG   |   15.1p | CTC             |  4425.1 |  4425.1 |     -2.20 | $51,042.40
-2026-09-04   | SKIP   |    2.0p | SKIP (insufficient_scope) |     --- |     --- |      0.00 | $51,042.40
-2026-09-07   | SHORT  |   21.6p | TP              |  4410.9 |  4389.3 |   +213.50 | $51,255.90
----------------------------------------------------------------------------------------------------------
+--- Testing Window 31 (2025-09-08 to 2025-09-18) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(9.51394422310757), 'tp_offset_y': np.float64(4.328685258964144), 'ctc_points': np.float64(85.60557768924303), 'scope_min_x': np.float64(4.5936254980079685), 'tp_mode': 'mode_1_dynamic'}
 
-BACKTEST SUMMARY:
-Total Days Evaluated : 25
-Total Trades Executed: 20
-Wins / Losses / Ties : 12 / 8 / 0
-Win Rate             : 60.0%
-Profit Factor        : 4.01
-Total Net PnL        : $+1,255.90
-Final Account Equity : $51,255.90
-===============================================================================================
+--- Testing Window 32 (2025-09-19 to 2025-09-30) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(6.7848605577689245), 'tp_offset_y': np.float64(2.143426294820717), 'ctc_points': np.float64(647.0478087649402), 'scope_min_x': np.float64(3.8446215139442232), 'tp_mode': 'mode_1_dynamic'}
+
+--- Testing Window 33 (2025-10-01 to 2025-10-12) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(16.89641434262948), 'tp_offset_y': np.float64(2.103585657370518), 'ctc_points': np.float64(503.2749003984064), 'scope_min_x': np.float64(4.98804780876494), 'tp_mode': 'mode_2_wait_1230'}
+
+--- Testing Window 34 (2025-10-13 to 2025-10-23) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(13.322709163346614), 'tp_offset_y': np.float64(5.438247011952191), 'ctc_points': np.float64(713.4462151394422), 'scope_min_x': np.float64(1.3984063745019921), 'tp_mode': 'mode_2_wait_1230'}
+
+--- Testing Window 35 (2025-10-24 to 2025-11-04) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(7.103585657370518), 'tp_offset_y': np.float64(2.268924302788845), 'ctc_points': np.float64(625.5856573705179), 'scope_min_x': np.float64(7.788844621513944), 'tp_mode': 'mode_2_wait_1230'}
+
+--- Testing Window 36 (2025-11-05 to 2025-11-16) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(15.91633466135458), 'tp_offset_y': np.float64(3.635458167330677), 'ctc_points': np.float64(97.88047808764941), 'scope_min_x': np.float64(5.286852589641434), 'tp_mode': 'mode_1_dynamic'}
+
+--- Testing Window 37 (2025-11-17 to 2025-11-27) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(17.243027888446214), 'tp_offset_y': np.float64(9.314741035856574), 'ctc_points': np.float64(744.5776892430279), 'scope_min_x': np.float64(8.179282868525897), 'tp_mode': 'mode_2_wait_1230'}
+
+--- Testing Window 38 (2025-11-28 to 2025-12-09) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(7.569721115537849), 'tp_offset_y': np.float64(7.942231075697211), 'ctc_points': np.float64(740.4183266932271), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_2_wait_1230'}
+
+--- Testing Window 39 (2025-12-10 to 2025-12-21) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(6.908366533864542), 'tp_offset_y': np.float64(8.691235059760956), 'ctc_points': np.float64(645.203187250996), 'scope_min_x': np.float64(4.824701195219124), 'tp_mode': 'mode_1_dynamic'}
+
+--- Testing Window 40 (2025-12-22 to 2026-01-01) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(11.298804780876495), 'tp_offset_y': np.float64(2.3386454183266934), 'ctc_points': np.float64(838.7171314741036), 'scope_min_x': np.float64(7.9800796812749), 'tp_mode': 'mode_2_wait_1230'}
+
+--- Testing Window 41 (2026-01-02 to 2026-01-13) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(6.294820717131474), 'tp_offset_y': np.float64(1.9203187250996017), 'ctc_points': np.float64(544.6852589641434), 'scope_min_x': np.float64(6.673306772908367), 'tp_mode': 'mode_2_wait_1230'}
+
+--- Testing Window 42 (2026-01-14 to 2026-01-25) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(15.119521912350598), 'tp_offset_y': np.float64(2.5597609561752988), 'ctc_points': np.float64(100.54581673306772), 'scope_min_x': np.float64(2.358565737051793), 'tp_mode': 'mode_1_dynamic'}
+
+--- Testing Window 43 (2026-01-26 to 2026-02-05) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(13.091633466135459), 'tp_offset_y': np.float64(8.904382470119522), 'ctc_points': np.float64(178.41035856573706), 'scope_min_x': np.float64(7.8326693227091635), 'tp_mode': 'mode_1_dynamic'}
+
+--- Testing Window 44 (2026-02-06 to 2026-02-17) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(6.047808764940239), 'tp_offset_y': np.float64(7.800796812749004), 'ctc_points': np.float64(223.4422310756972), 'scope_min_x': np.float64(3.7808764940239046), 'tp_mode': 'mode_1_dynamic'}
+
+--- Testing Window 45 (2026-02-18 to 2026-03-01) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(6.426294820717131), 'tp_offset_y': np.float64(2.4760956175298805), 'ctc_points': np.float64(382.55378486055776), 'scope_min_x': np.float64(2.637450199203187), 'tp_mode': 'mode_2_wait_1230'}
+
+--- Testing Window 46 (2026-03-02 to 2026-03-12) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(5.956175298804781), 'tp_offset_y': np.float64(8.215139442231076), 'ctc_points': np.float64(104.56972111553785), 'scope_min_x': np.float64(4.932270916334661), 'tp_mode': 'mode_2_wait_1230'}
+
+--- Testing Window 47 (2026-03-13 to 2026-03-24) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(7.191235059760956), 'tp_offset_y': np.float64(3.0318725099601593), 'ctc_points': np.float64(225.29083665338646), 'scope_min_x': np.float64(8.613545816733067), 'tp_mode': 'mode_2_wait_1230'}
+
+--- Testing Window 48 (2026-03-25 to 2026-04-06) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(6.669322709163347), 'tp_offset_y': np.float64(2.908366533864542), 'ctc_points': np.float64(204.42629482071712), 'scope_min_x': np.float64(2.350597609561753), 'tp_mode': 'mode_2_wait_1230'}
+
+--- Testing Window 49 (2026-04-07 to 2026-04-17) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(16.326693227091635), 'tp_offset_y': np.float64(4.792828685258964), 'ctc_points': np.float64(74.60956175298804), 'scope_min_x': np.float64(6.98804780876494), 'tp_mode': 'mode_1_dynamic'}
+
+--- Testing Window 50 (2026-04-19 to 2026-04-29) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(9.215139442231076), 'tp_offset_y': np.float64(2.3366533864541834), 'ctc_points': np.float64(737.0637450199204), 'scope_min_x': np.float64(3.250996015936255), 'tp_mode': 'mode_1_dynamic'}
+
+--- Testing Window 51 (2026-04-30 to 2026-05-11) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(7.342629482071713), 'tp_offset_y': np.float64(2.553784860557769), 'ctc_points': np.float64(101.76494023904382), 'scope_min_x': np.float64(4.087649402390438), 'tp_mode': 'mode_2_wait_1230'}
+
+--- Testing Window 52 (2026-05-12 to 2026-05-22) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(18.0597609561753), 'tp_offset_y': np.float64(3.0219123505976095), 'ctc_points': np.float64(228.17131474103584), 'scope_min_x': np.float64(5.649402390438247), 'tp_mode': 'mode_1_dynamic'}
+
+--- Testing Window 53 (2026-05-24 to 2026-06-03) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(8.681274900398407), 'tp_offset_y': np.float64(2.0617529880478087), 'ctc_points': np.float64(795.4780876494024), 'scope_min_x': np.float64(1.8924302788844622), 'tp_mode': 'mode_2_wait_1230'}
+
+--- Testing Window 54 (2026-06-04 to 2026-06-15) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(6.609561752988048), 'tp_offset_y': np.float64(8.866533864541832), 'ctc_points': np.float64(716.8406374501992), 'scope_min_x': np.float64(7.055776892430279), 'tp_mode': 'mode_1_dynamic'}
+
+--- Testing Window 55 (2026-06-16 to 2026-06-26) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(11.187250996015937), 'tp_offset_y': np.float64(6.312749003984064), 'ctc_points': np.float64(658.9561752988047), 'scope_min_x': np.float64(8.302788844621514), 'tp_mode': 'mode_2_wait_1230'}
+
+--- Testing Window 56 (2026-06-28 to 2026-07-08) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(17.46215139442231), 'tp_offset_y': np.float64(8.442231075697212), 'ctc_points': np.float64(364.5816733067729), 'scope_min_x': np.float64(7.948207171314741), 'tp_mode': 'mode_1_dynamic'}
+
+--- Testing Window 57 (2026-07-09 to 2026-07-20) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(9.147410358565738), 'tp_offset_y': np.float64(2.1254980079681274), 'ctc_points': np.float64(406.45816733067727), 'scope_min_x': np.float64(3.1115537848605577), 'tp_mode': 'mode_1_dynamic'}
+
+--- Testing Window 58 (2026-07-21 to 2026-07-31) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(17.605577689243027), 'tp_offset_y': np.float64(1.9462151394422311), 'ctc_points': np.float64(678.5179282868526), 'scope_min_x': np.float64(7.565737051792829), 'tp_mode': 'mode_1_dynamic'}
+
+--- Testing Window 59 (2026-08-02 to 2026-08-12) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(15.54581673306773), 'tp_offset_y': np.float64(1.7828685258964143), 'ctc_points': np.float64(478.9322709163347), 'scope_min_x': np.float64(8.693227091633466), 'tp_mode': 'mode_1_dynamic'}
+
+--- Testing Window 60 (2026-08-13 to 2026-08-24) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(16.41434262948207), 'tp_offset_y': np.float64(5.125498007968128), 'ctc_points': np.float64(535.6653386454183), 'scope_min_x': np.float64(8.298804780876495), 'tp_mode': 'mode_1_dynamic'}
+
+--- Testing Window 61 (2026-08-25 to 2026-09-04) ---
+Adaptive Params selected: {'sl_points': np.float64(13.0199203187251), 'tp_offset_y': np.float64(1.9143426294820718), 'ctc_points': np.float64(252.31474103585657), 'scope_min_x': np.float64(1.4581673306772909), 'tp_mode': 'mode_1_dynamic'}
+Oracle Params (perfect hindsight): {'sl_points': np.float64(16.286852589641434), 'tp_offset_y': np.float64(7.908366533864542), 'ctc_points': np.float64(642.8047808764941), 'scope_min_x': np.float64(9.243027888446216), 'tp_mode': 'mode_1_dynamic'}
+
+=== Walk-Forward Out-Of-Sample Results ===
+Adaptive Policy Switch Count: 0
+Static Baseline Out-of-Sample Sharpe: 1.563
+   => 95% Confidence Interval: [-0.518, 3.415]
+Adaptive Policy Out-of-Sample Sharpe: 1.563
+   => 95% Confidence Interval: [-0.725, 3.282]
+Oracle Bound    Out-of-Sample Sharpe: 4.626
+   => 95% Confidence Interval: [3.178, 6.811]
