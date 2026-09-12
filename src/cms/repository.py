@@ -8,14 +8,14 @@ import sqlite3
 import json
 import datetime as dt
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Union, Optional, List, Dict, Any
 
 from src.cms.models import HypothesisCard, HypothesisStatus, ManualTradeRecord
 from src.sequencer.fsm import TradeLeg, TradeChain
 
 
 class DatabaseRepository:
-    def __init__(self, db_path: Path | str = "hypotrader.db"):
+    def __init__(self, db_path: Union[Path, str] = "hypotrader.db"):
         self.db_path = str(db_path)
         self.init_db()
 

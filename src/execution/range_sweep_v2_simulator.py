@@ -34,9 +34,9 @@ class RangeSweepV2SimConfig:
 class RangeSweepV2Simulator:
     def __init__(
         self,
-        fee_model: FeeModel | None = None,
+        fee_model: Optional[FeeModel] = None,
         point_value: float = 1.0,
-        config: RangeSweepV2SimConfig | None = None,
+        config: Optional[RangeSweepV2SimConfig] = None,
         df_1m: Optional[pd.DataFrame] = None,
     ):
         self.fee_model = fee_model or FeeModel()
@@ -219,6 +219,19 @@ class RangeSweepV2Simulator:
                 fill = leg.sl_price - self.fee_model.base_slippage_pts if leg.direction == "LONG" else leg.sl_price + self.fee_model.base_slippage_pts
                 return self._close_leg(chain, leg, bar_time, fill, "SL")
             elif resolution.event_type == "CTC_SL_HIT":
+                if not leg.ctc_armed:
+                    leg.ctc_armed = True
+                    leg.ctc_time = bar_time
+                    leg.ctc_price = leg.entry_price + ctc_threshold if leg.direction == "LONG" else leg.entry_price - ctc_threshold
+                    chain.record_event(
+                        f"CTC_STEP_L{leg.depth}",
+                        time=bar_time,
+                        trigger_price=leg.ctc_price,
+                        old_sl=leg.sl_price,
+                        new_sl=leg.entry_price,
+                        note=f"CTC armed and hit in same bar ({resolution.tier.value})",
+                    )
+                    leg.sl_price = leg.entry_price
                 fill = leg.entry_price - self.fee_model.base_slippage_pts if leg.direction == "LONG" else leg.entry_price + self.fee_model.base_slippage_pts
                 return self._close_leg(chain, leg, bar_time, fill, "CTC")
             elif resolution.event_type == "CTC_ARM":

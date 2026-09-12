@@ -40,9 +40,9 @@ class OrderSignal:
 class SydneyRangeFadeStrategy:
     def __init__(
         self,
-        config: SydneyRangeFadeConfig | None = None,
-        session_engine: SessionEngine | None = None,
-        risk_service: RiskService | None = None,
+        config: Optional[SydneyRangeFadeConfig] = None,
+        session_engine: Optional[SessionEngine] = None,
+        risk_service: Optional[RiskService] = None,
     ):
         self.config = config or SydneyRangeFadeConfig()
         self.session_engine = session_engine or SessionEngine()

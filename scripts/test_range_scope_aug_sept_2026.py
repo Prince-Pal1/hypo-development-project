@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.session.engine import SessionEngine
 from src.core.risk_service import RiskService, RiskServiceLimits
+from src.execution.ambiguity_resolver import load_1min_dataframe
 from src.strategies.range_scope_v1 import RangeScopeStrategy, RangeScopeConfig
 from src.execution.range_scope_simulator import RangeScopeSimulator, RangeScopeTradeResult
 from src.execution.simulator import FeeModel, ZERO_FEE_MODEL
@@ -94,9 +95,11 @@ def run_range_scope_backtest(
     )
     strategy = RangeScopeStrategy(strategy_config, risk_service)
     session_engine = strategy.session_engine
+    df_1m = load_1min_dataframe(str(parquet_path).replace("5m.parquet", "1m.parquet"), reference_df=df)
     simulator = RangeScopeSimulator(
         fee_model=ZERO_FEE_MODEL if zero_fees else FeeModel(),
         point_value=1.0,
+        df_1m=df_1m,
     )
 
     start_dt = dt.date.fromisoformat(start_date)

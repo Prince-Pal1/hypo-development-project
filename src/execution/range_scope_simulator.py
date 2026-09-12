@@ -62,7 +62,7 @@ class RangeScopeTradeResult:
 class RangeScopeSimulator:
     def __init__(
         self,
-        fee_model: FeeModel | None = None,
+        fee_model: Optional[FeeModel] = None,
         point_value: float = 1.0,
         df_1m: Optional[pd.DataFrame] = None,
     ):
@@ -238,6 +238,20 @@ class RangeScopeSimulator:
                     return self._close_trade(trade, bar_time, resolution.price, "SL",
                         f"Stop loss hit (resolved: {resolution.tier.value})")
                 elif resolution.event_type == "CTC_SL_HIT":
+                    if not trade.ctc_armed:
+                        trade.ctc_armed = True
+                        trade.ctc_time = bar_time
+                        if signal.direction == "LONG":
+                            trade.ctc_price = round(trade.entry_price + ctc_threshold, 3)
+                        else:
+                            trade.ctc_price = round(trade.entry_price - ctc_threshold, 3)
+                        trade.sl_price = trade.entry_price
+                        trade.events.append({
+                            "type": "CTC_ARMED",
+                            "time": bar_time,
+                            "price": trade.ctc_price,
+                            "note": f"+{ctc_threshold:.1f} pts reached -> SL stepped to Breakeven (same bar as hit)",
+                        })
                     return self._close_trade(trade, bar_time, trade.entry_price, "CTC",
                         f"CTC-SL hit at breakeven (resolved: {resolution.tier.value})")
                 elif resolution.event_type == "CTC_ARM":

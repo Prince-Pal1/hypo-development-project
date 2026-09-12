@@ -78,8 +78,8 @@ class RangeScopeSignal:
 class RangeScopeStrategy:
     def __init__(
         self,
-        config: RangeScopeConfig | None = None,
-        risk_service: RiskService | None = None,
+        config: Optional[RangeScopeConfig] = None,
+        risk_service: Optional[RiskService] = None,
     ):
         self.config = config or RangeScopeConfig()
         eval_time_str = getattr(self.config, "eval_time_ist", "11:00") or "11:00"

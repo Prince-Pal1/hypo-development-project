@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.session.engine import SessionEngine
 from src.core.risk_service import RiskService, RiskServiceLimits
+from src.execution.ambiguity_resolver import load_1min_dataframe
 from src.strategies.range_sweep_v2 import RangeSweepV2Strategy, RangeSweepV2Config
 from src.sequencer.fsm import TradeChain, ChainedFollowUpConfig, ChainStatus
 from src.execution.range_sweep_v2_simulator import RangeSweepV2Simulator, RangeSweepV2SimConfig
@@ -132,6 +133,7 @@ def run_range_sweep_v2_backtest(
         requested_multiplier=1.0,
         max_chain_depth=2 if enable_flip else 1,
     )
+    df_1m = load_1min_dataframe(str(parquet_path).replace("5m.parquet", "1m.parquet"), reference_df=df)
     simulator = RangeSweepV2Simulator(
         fee_model=ZERO_FEE_MODEL if zero_fees else FeeModel(),
         point_value=1.0,
@@ -141,6 +143,7 @@ def run_range_sweep_v2_backtest(
             decay_points=decay,
             enable_flip=enable_flip,
         ),
+        df_1m=df_1m,
     )
     repo = DatabaseRepository(db_path_obj)
 

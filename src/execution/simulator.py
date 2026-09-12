@@ -25,7 +25,7 @@ ZERO_FEE_MODEL = FeeModel(spread_pts=0.0, commission_per_unit=0.0, base_slippage
 class ExecutionSimulator:
     def __init__(
         self,
-        fee_model: FeeModel | None = None,
+        fee_model: Optional[FeeModel] = None,
         point_value: float = 1.0,
         ctc_threshold_pts: Optional[float] = 10.0,
     ):

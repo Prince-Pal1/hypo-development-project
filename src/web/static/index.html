@@ -2590,7 +2590,7 @@
                 svg += `<text x="${box1Right - 5}" y="${yHigh1100 + 12}" text-anchor="end" font-size="9" fill="#06b6d4" font-family="'JetBrains Mono', monospace">High: ${r1100High.toFixed(1)}</text>`;
                 svg += `<line x1="${box1Left}" y1="${yLow1100}" x2="${box1Right}" y2="${yLow1100}" stroke="#06b6d4" stroke-width="1" stroke-dasharray="3 2" opacity="0.6"/>`;
                 svg += `<text x="${box1Right - 5}" y="${yLow1100 - 5}" text-anchor="end" font-size="9" fill="#06b6d4" font-family="'JetBrains Mono', monospace">Low: ${r1100Low.toFixed(1)}</text>`;
-                svg += `<text x="${box1Left + 6}" y="${yHigh1100 + (yLow1100 - yHigh1100) / 2}" font-size="8.5" fill="#8b949e" opacity="0.75">R: ${(r1100High - r1100Low).toFixed(1)}p</text>`;
+                svg += `<text x="${box1Left + 6}" y="${yHigh1100 + (yLow1100 - yHigh1100) / 2}" font-size="8.5" fill="#8b949e" opacity="0.75">R: ${(r1100High - r1100Low).toFixed(2)}p</text>`;
 
                 // BOX 2: Range (S2 Sweep)
                 const box2Left = 138;
@@ -2606,7 +2606,7 @@
                 svg += `<text x="${box2Right - 5}" y="${yHigh1230 + 12}" text-anchor="end" font-size="9" fill="#bc8cff" font-family="'JetBrains Mono', monospace">High: ${r1230High.toFixed(1)}</text>`;
                 svg += `<line x1="${box2Left}" y1="${yLow1230}" x2="${box2Right}" y2="${yLow1230}" stroke="#bc8cff" stroke-width="1" stroke-dasharray="3 2" opacity="0.6"/>`;
                 svg += `<text x="${box2Right - 5}" y="${yLow1230 - 5}" text-anchor="end" font-size="9" fill="#bc8cff" font-family="'JetBrains Mono', monospace">Low: ${r1230Low.toFixed(1)}</text>`;
-                svg += `<text x="${box2Left + 6}" y="${yHigh1230 + (yLow1230 - yHigh1230) / 2}" font-size="8.5" fill="#8b949e" opacity="0.75">R: ${(r1230High - r1230Low).toFixed(1)}p</text>`;
+                svg += `<text x="${box2Left + 6}" y="${yHigh1230 + (yLow1230 - yHigh1230) / 2}" font-size="8.5" fill="#8b949e" opacity="0.75">R: ${(r1230High - r1230Low).toFixed(2)}p</text>`;
             } else {
                 // Single Strategy Mode: 1 Range Box
                 const boxLeft = 35;
@@ -2638,8 +2638,8 @@
 
                 const isSkip = day.day_type === "SKIP";
                 const evalText = isSkip
-                    ? `${s1EvalTime} eval: Nearer ${day.direction === 'SHORT' ? 'Low' : 'High'} &bull; Scope = ${day.scope_points ? day.scope_points.toFixed(1) : '0.0'} pts &rarr; SKIP`
-                    : `${s1EvalTime} eval: Nearer ${day.direction === 'SHORT' ? 'Low &rarr; SHORT' : 'High &rarr; LONG'} &bull; Scope = ${day.scope_points ? day.scope_points.toFixed(1) : ''} pts`;
+                    ? `${s1EvalTime} eval: Nearer ${day.direction === 'SHORT' ? 'Low' : 'High'} &bull; Scope = ${day.scope_points ? day.scope_points.toFixed(2) : '0.0'} pts &rarr; SKIP`
+                    : `${s1EvalTime} eval: Nearer ${day.direction === 'SHORT' ? 'Low &rarr; SHORT' : 'High &rarr; LONG'} &bull; Scope = ${day.scope_points ? day.scope_points.toFixed(2) : ''} pts`;
                 svg += `<text x="250" y="30" text-anchor="middle" font-size="11.5" font-weight="700" fill="#06b6d4">${evalText}</text>`;
 
                 // Standardized Checkpoint Marker: Eval Time Open Price Dot
@@ -2684,10 +2684,20 @@
                     svg += `<circle cx="450" cy="${y1230}" r="5" fill="#58a6ff" stroke="#ffffff" stroke-width="2"/>`;
                     svg += `<text x="458" y="${y1230 - 8}" font-size="11" font-weight="700" fill="#58a6ff" font-family="'JetBrains Mono', monospace">${s2EvalTime} Open: $${price1230.toFixed(1)}</text>`;
 
+                    // Track actual timing relative to 12:30
+                    const getUnixTimestamp = (timeStr) => timeStr ? new Date(timeStr.replace(' ', 'T')).getTime() / 1000 : null;
+                    const eval1230Ts = day.sessions ? day.sessions.eval_1230 : null;
+                    const l1ExitTs = getUnixTimestamp(l1.exit_time);
+                    const l1CtcTs = getUnixTimestamp(l1.ctc_time);
+                    
+                    const isExitBefore1230 = (eval1230Ts && l1ExitTs) ? (l1ExitTs <= eval1230Ts) : true;
+                    const isCtcBefore1230 = (eval1230Ts && l1CtcTs) ? (l1CtcTs <= eval1230Ts) : true;
+
                     // Stop Loss Line & CTC Stepped Line
-                    const slExitX = hitSl ? 350 : 680;
+                    const slExitX = hitSl ? (isExitBefore1230 ? 350 : 500) : 680;
                     if (l1.ctc_armed && l1.ctc_price) {
-                        const ctcX = 350;
+                        const ctcX = isCtcBefore1230 ? 350 : 500;
+                        const slExitX = isExitBefore1230 ? 410 : 550;
                         const yCtc = getY(l1.ctc_price);
                         svg += `<line x1="250" y1="${ySlInitial}" x2="${ctcX}" y2="${ySlInitial}" stroke="#f85149" stroke-width="2"/>`;
                         svg += `<text x="260" y="${ySlInitial + 14}" font-size="11" fill="#f85149">Fixed SL ${(l1.initial_sl_price || l1.sl_price).toFixed(1)} (-10 pts)</text>`;
@@ -2717,7 +2727,7 @@
                         svg += `<text x="462" y="${yExit}" font-size="11" font-weight="700" fill="#3fb950" dominant-baseline="central">⚡ ${s2EvalTime} Profit Lock-In (+${Math.abs(l1.exit_price - l1.entry_price).toFixed(1)} pts, +$${l1.pnl_net.toFixed(2)})</text>`;
                     } else if (hitTp) {
                         // Check if hit before or after 12:30
-                        const hitBefore1230 = Math.abs(l1.exit_price - initialTp) < 0.05 && (!day.tp_at_1230 || Math.abs(day.tp_at_1230 - initialTp) > 0.05);
+                        const hitBefore1230 = (eval1230Ts && l1ExitTs) ? isExitBefore1230 : (Math.abs(l1.exit_price - initialTp) < 0.05 && (!day.tp_at_1230 || Math.abs(day.tp_at_1230 - initialTp) > 0.05));
                         if (hitBefore1230) {
                             svg += `<line x1="250" y1="${yInitialTp}" x2="380" y2="${yInitialTp}" stroke="#3fb950" stroke-width="2.2"/>`;
                             svg += `<text x="260" y="${yInitialTp - 6}" font-size="11" fill="#3fb950">Target: ${initialTp.toFixed(1)}</text>`;
@@ -2740,13 +2750,24 @@
                             svg += `<text x="612" y="${yAdjTp}" font-size="11" font-weight="700" fill="#3fb950" dominant-baseline="central">Target Hit (+${Math.abs(l1.exit_price - l1.entry_price).toFixed(1)} pts, +$${l1.pnl_net.toFixed(2)})</text>`;
                         }
                     } else if (hitSl) {
-                        // Initial TP runs dashed to 12:30
-                        svg += `<line x1="250" y1="${yInitialTp}" x2="450" y2="${yInitialTp}" stroke="#3fb950" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.4"/>`;
-                        svg += `<text x="260" y="${yInitialTp - 6}" font-size="11" fill="#8b949e">Target: ${initialTp.toFixed(1)} (not reached)</text>`;
+                        if (!isExitBefore1230) {
+                            // Hit SL/CTC AFTER 12:30 -> Shift TP
+                            svg += `<line x1="250" y1="${yInitialTp}" x2="450" y2="${yInitialTp}" stroke="#3fb950" stroke-width="1.8" stroke-dasharray="4 3" opacity="0.6"/>`;
+                            svg += `<text x="260" y="${yInitialTp - 6}" font-size="11" fill="#8b949e">Initial Target: ${initialTp.toFixed(1)}</text>`;
+                            const adjTp = day.tp_at_1230 || (l1.direction === "LONG" ? rHigh - 4 : rLow + 4);
+                            const yAdjTp = getY(adjTp);
+                            svg += `<line x1="450" y1="${yInitialTp}" x2="450" y2="${yAdjTp}" stroke="#3fb950" stroke-width="1.5" stroke-dasharray="3 3"/>`;
+                            svg += `<line x1="450" y1="${yAdjTp}" x2="550" y2="${yAdjTp}" stroke="#3fb950" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.4"/>`;
+                        } else {
+                            // Initial TP runs dashed to 12:30
+                            svg += `<line x1="250" y1="${yInitialTp}" x2="450" y2="${yInitialTp}" stroke="#3fb950" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.4"/>`;
+                            svg += `<text x="260" y="${yInitialTp - 6}" font-size="11" fill="#8b949e">Target: ${initialTp.toFixed(1)} (not reached)</text>`;
+                        }
 
                         // SL Exit Marker
-                        svg += `<circle cx="350" cy="${ySl}" r="6" fill="#f85149" stroke="#ffffff" stroke-width="2"/>`;
-                        svg += `<text x="362" y="${ySl}" font-size="11" font-weight="700" fill="#f85149" dominant-baseline="central">SL Hit (&minus;${Math.abs(l1.entry_price - l1.sl_price).toFixed(1)} pts, &minus;$${Math.abs(l1.pnl_net).toFixed(2)})</text>`;
+                        const slX = isExitBefore1230 ? 350 : 550;
+                        svg += `<circle cx="${slX}" cy="${ySl}" r="6" fill="#f85149" stroke="#ffffff" stroke-width="2"/>`;
+                        svg += `<text x="${slX + 12}" y="${ySl}" font-size="11" font-weight="700" fill="#f85149" dominant-baseline="central">SL Hit (&minus;${Math.abs(l1.entry_price - l1.sl_price).toFixed(1)} pts, &minus;$${Math.abs(l1.pnl_net).toFixed(2)})</text>`;
                     } else if (hitEod) {
                         // Initial TP runs to 12:30
                         svg += `<line x1="250" y1="${yInitialTp}" x2="450" y2="${yInitialTp}" stroke="#3fb950" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.4"/>`;
@@ -2793,7 +2814,7 @@
 
                     const isS1Skip = s1.day_type === "SKIP" || !s1.legs || s1.legs.length === 0;
                     if (isS1Skip) {
-                        const s1ScopeVal = (typeof s1.scope_points === "number" ? s1.scope_points : (s1.scope || 0)).toFixed(1);
+                        const s1ScopeVal = (typeof s1.scope_points === "number" ? s1.scope_points : (s1.scope || 0)).toFixed(2);
                         svg += `<circle cx="${x1100}" cy="${yEval1}" r="6" fill="#d29922"/>`;
                         svg += `<text x="${x1100 + 10}" y="${yEval1 + 13}" font-size="9.5" fill="#d29922" font-weight="600">🛑 [S1] Scope Skipped (${s1ScopeVal} &lt; ${s1.scope_min_x || 5}p)</text>`;
                     } else {
@@ -2815,14 +2836,21 @@
                         svg += `<circle cx="${x1100}" cy="${yS1Entry}" r="5.5" fill="#06b6d4" stroke="#ffffff" stroke-width="2"/>`;
                         svg += `<text x="${x1100 + 10}" y="${yS1Entry + (s1DirUp ? -8 : 14)}" font-size="9.5" font-weight="700" fill="#06b6d4">[S1] ⚡ ${s1L.direction} @ ${s1L.entry_price.toFixed(1)}</text>`;
 
+                        const getUnixTimestamp = (timeStr) => timeStr ? new Date(timeStr.replace(' ', 'T')).getTime() / 1000 : null;
+                        const eval1230Ts = day.sessions ? day.sessions.eval_1230 : null;
+                        const s1ExitTs = getUnixTimestamp(s1L.exit_time);
+                        const s1CtcTs = getUnixTimestamp(s1L.ctc_time);
+                        const isS1ExitBefore1230 = (eval1230Ts && s1ExitTs) ? (s1ExitTs <= eval1230Ts) : true;
+                        const isS1CtcBefore1230 = (eval1230Ts && s1CtcTs) ? (s1CtcTs <= eval1230Ts) : true;
+
                         // S1 Stop Loss Line & Exit
                         let xS1SlExit = x1230;
-                        if (s1HitSl) {
-                            xS1SlExit = 390;
+                        if (s1HitSl || s1HitCtc) {
+                            xS1SlExit = isS1ExitBefore1230 ? 390 : 540;
                         }
 
                         if (s1L.ctc_armed && s1L.ctc_price) {
-                            const ctcX1 = 360;
+                            const ctcX1 = isS1CtcBefore1230 ? 360 : 490;
                             const yCtc1 = getY(s1L.ctc_price);
                             svg += `<line x1="${x1100}" y1="${yS1SlInitial}" x2="${ctcX1}" y2="${yS1SlInitial}" stroke="#f85149" stroke-width="1.8"/>`;
                             svg += `<text x="${x1100 + 10}" y="${yS1SlInitial + (s1DirUp ? 12 : -5)}" font-size="9" fill="#f85149">[S1] SL1 ${(s1L.initial_sl_price || s1L.sl_price).toFixed(1)}</text>`;
@@ -2835,8 +2863,8 @@
                             svg += `<text x="${ctcX1 + 10}" y="${yS1Entry + (s1DirUp ? 13 : -6)}" font-size="9" fill="#8b949e">[S1] SL&rarr;BE</text>`;
 
                             if (s1HitCtc) {
-                                svg += `<circle cx="410" cy="${yS1Entry}" r="5.5" fill="#bc8cff" stroke="#ffffff" stroke-width="1.5"/>`;
-                                svg += `<text x="418" y="${yS1Entry}" font-size="9.5" font-weight="700" fill="#bc8cff" dominant-baseline="central">[S1] CTC-SL Hit ($0.0)</text>`;
+                                svg += `<circle cx="${xS1SlExit}" cy="${yS1Entry}" r="5.5" fill="#bc8cff" stroke="#ffffff" stroke-width="1.5"/>`;
+                                svg += `<text x="${xS1SlExit + 8}" y="${yS1Entry}" font-size="9.5" font-weight="700" fill="#bc8cff" dominant-baseline="central">[S1] CTC-SL Hit ($0.0)</text>`;
                             }
                         } else {
                             svg += `<line x1="${x1100}" y1="${yS1SlInitial}" x2="${xS1SlExit}" y2="${yS1SlInitial}" stroke="#f85149" stroke-width="1.8"/>`;
@@ -2857,7 +2885,7 @@
                             svg += `<circle cx="${x1230}" cy="${yLockinExit}" r="6" fill="#3fb950" stroke="#ffffff" stroke-width="2"/>`;
                             svg += `<text x="${x1230 + 10}" y="${yLockinExit - 8}" font-size="9.5" font-weight="700" fill="#3fb950">[S1] ⚡ ${s2EvalTime} Lock-In (+${Math.abs(s1L.exit_price - s1L.entry_price).toFixed(1)}p, +$${s1L.pnl_net.toFixed(1)})</text>`;
                         } else if (s1HitTp) {
-                            const isBefore1230 = Math.abs(s1L.exit_price - s1InitialTp) < 0.05 && (!s1.tp_at_1230 || Math.abs(s1.tp_at_1230 - s1InitialTp) > 0.05);
+                            const isBefore1230 = (eval1230Ts && s1ExitTs) ? isS1ExitBefore1230 : (Math.abs(s1L.exit_price - s1InitialTp) < 0.05 && (!s1.tp_at_1230 || Math.abs(s1.tp_at_1230 - s1InitialTp) > 0.05));
                             if (isBefore1230) {
                                 const xTp1Hit = 390;
                                 svg += `<line x1="${x1100}" y1="${yS1InitialTp}" x2="${xTp1Hit}" y2="${yS1InitialTp}" stroke="#3fb950" stroke-width="2"/>`;
@@ -2878,8 +2906,19 @@
                                 svg += `<text x="${xTp2Hit + 8}" y="${yS1AdjTp - 8}" font-size="9.5" font-weight="700" fill="#3fb950">[S1] Adj TP Hit @ ${s1AdjTp.toFixed(1)} (+${Math.abs(s1L.exit_price - s1L.entry_price).toFixed(1)}p, +$${s1L.pnl_net.toFixed(1)})</text>`;
                             }
                         } else {
-                            svg += `<line x1="${x1100}" y1="${yS1InitialTp}" x2="${x1230}" y2="${yS1InitialTp}" stroke="#3fb950" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.35"/>`;
-                            svg += `<text x="${x1100 + 10}" y="${yS1InitialTp + (s1DirUp ? -6 : 12)}" font-size="9" fill="#8b949e">[S1] Initial TP ${s1InitialTp.toFixed(1)}</text>`;
+                            if (!isS1ExitBefore1230) {
+                                // Hit CTC or SL after 12:30 -> Show TP Shift
+                                svg += `<line x1="${x1100}" y1="${yS1InitialTp}" x2="${x1230}" y2="${yS1InitialTp}" stroke="#3fb950" stroke-width="1.8" stroke-dasharray="4 3" opacity="0.6"/>`;
+                                svg += `<text x="${x1100 + 10}" y="${yS1InitialTp + (s1DirUp ? -6 : 12)}" font-size="9" fill="#8b949e">[S1] Initial TP ${s1InitialTp.toFixed(1)}</text>`;
+
+                                const s1AdjTp = s1.tp_at_1230 || (s1L.direction === "LONG" ? r1100High - (day.parameters?.scope_tp_offset_y || 4) : r1100Low + (day.parameters?.scope_tp_offset_y || 4));
+                                const yS1AdjTp = getY(s1AdjTp);
+                                svg += `<line x1="${x1230}" y1="${yS1InitialTp}" x2="${x1230}" y2="${yS1AdjTp}" stroke="#3fb950" stroke-width="1.5" stroke-dasharray="3 3"/>`;
+                                svg += `<line x1="${x1230}" y1="${yS1AdjTp}" x2="${xS1SlExit}" y2="${yS1AdjTp}" stroke="#3fb950" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.4"/>`;
+                            } else {
+                                svg += `<line x1="${x1100}" y1="${yS1InitialTp}" x2="${x1230}" y2="${yS1InitialTp}" stroke="#3fb950" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.35"/>`;
+                                svg += `<text x="${x1100 + 10}" y="${yS1InitialTp + (s1DirUp ? -6 : 12)}" font-size="9" fill="#8b949e">[S1] Initial TP ${s1InitialTp.toFixed(1)}</text>`;
+                            }
                         }
                     }
                 }
@@ -3461,12 +3500,31 @@
 
             // Render Table Body
             const getOutcomeColor = (exitReason, pnlNet) => {
-                if (exitReason === "CTC" || exitReason === "BREAKEVEN") return "#bc8cff";
-                if (exitReason === "DECAY") return "var(--amber)";
-                if (exitReason === "EXPIRED") return "var(--text-muted)";
+                if (!exitReason) return "var(--text-muted)";
+                const r = exitReason.toUpperCase();
+                if (r.includes("CTC") || r.includes("BREAKEVEN")) return "#bc8cff";
+                if (r.includes("DECAY")) return "var(--amber)";
+                if (r.includes("EXPIRED") || r.includes("SKIP") || r.includes("TIE")) return "var(--text-muted)";
                 if (pnlNet > 0) return "var(--green)";
                 if (pnlNet < 0) return "var(--red)";
                 return "var(--text-muted)";
+            };
+
+            const formatLegOutcome = (direction, reason, pnl, exitPrice, isFlip = false) => {
+                if (!reason) return "—";
+                const pnlVal = pnl || 0;
+                const pnlStr = pnlVal >= 0 ? "+$" + pnlVal.toFixed(1) : "-$" + Math.abs(pnlVal).toFixed(1);
+                const color = getOutcomeColor(reason, pnlVal);
+                
+                const dirStr = direction ? (isFlip ? `Flip ${direction}` : direction) : "—";
+                let exitStr = exitPrice ? ` &bull; Exit: $${exitPrice.toFixed(1)}` : "";
+                
+                const rUpper = reason.toUpperCase();
+                if (rUpper.includes("DECAY") || rUpper.includes("EXPIRED") || rUpper.includes("SKIP") || rUpper.includes("TIE")) {
+                    exitStr = "";
+                }
+                
+                return `<span style="color:${color};"><strong>${dirStr} ${reason}</strong>${exitStr} (${pnlStr})</span>`;
             };
 
             tbody.innerHTML = "";
@@ -3490,22 +3548,14 @@
 
                     let l1Html = "—";
                     if (l1) {
-                        const l1Pnl = (l1.pnl_net || 0) >= 0 ? "+$" + l1.pnl_net.toFixed(1) : "-$" + Math.abs(l1.pnl_net).toFixed(1);
-                        const l1Color = getOutcomeColor(l1.exit_reason, l1.pnl_net || 0);
-                        l1Html = `<strong>${l1.exit_reason || "OPEN"}</strong> &bull; Exit: $${l1.exit_price ? l1.exit_price.toFixed(1) : '—'} (<span style="color:${l1Color};">${l1Pnl}</span>)`;
-                    } else if (r.day_type === "DECAY") {
-                        l1Html = `<span class="badge" style="background:rgba(210,153,34,0.15);color:#d29922;border:1px solid #d29922;">DECAY</span> (<span style="color:var(--text-muted);">$0.0</span>)`;
-                    } else if (r.day_type === "EXPIRED") {
-                        l1Html = `<span class="badge" style="background:rgba(139,148,158,0.15);color:#8b949e;border:1px solid #8b949e;">EXPIRED</span> (<span style="color:var(--text-muted);">$0.0</span>)`;
-                    } else if (r.day_type === "TIE") {
-                        l1Html = `<span style="color:var(--text-muted);">Proximity Tie (No Trade)</span>`;
+                        l1Html = formatLegOutcome(l1.direction || r.direction, l1.exit_reason, l1.pnl_net, l1.exit_price);
+                    } else if (r.day_type) {
+                        l1Html = formatLegOutcome(r.direction, r.day_type, r.pnl_net, null);
                     }
 
                     let l2Html = "—";
                     if (l2) {
-                        const l2Pnl = (l2.pnl_net || 0) >= 0 ? "+$" + l2.pnl_net.toFixed(1) : "-$" + Math.abs(l2.pnl_net).toFixed(1);
-                        const l2Color = getOutcomeColor(l2.exit_reason, l2.pnl_net || 0);
-                        l2Html = `<strong>${l2.direction} ${l2.exit_reason || "OPEN"}</strong> &bull; Exit: $${l2.exit_price ? l2.exit_price.toFixed(1) : '—'} (<span style="color:${l2Color};">${l2Pnl}</span>)`;
+                        l2Html = formatLegOutcome(l2.direction, l2.exit_reason, l2.pnl_net, l2.exit_price, true);
                     }
 
                     tr.innerHTML = `
@@ -3522,7 +3572,7 @@
                     const isSkip = r.day_type === "SKIP";
                     const rawScope = typeof r.scope_points === "number" ? r.scope_points : (r.scope || 0);
                     const minX = backtestData.parameters ? backtestData.parameters.scope_min_x : 5.0;
-                    let scopePts = rawScope.toFixed(1);
+                    let scopePts = rawScope.toFixed(2);
 
                     const scopeGateHtml = isSkip
                         ? `<span class="badge" style="background:rgba(210,153,34,0.15);color:#d29922;border:1px solid #d29922;">🛑 ${scopePts} pts (&lt; ${minX})</span>`
@@ -3566,11 +3616,9 @@
 
                     let outcomeHtml = "—";
                     if (isSkip) {
-                        outcomeHtml = `<span style="color:var(--text-muted);">Scope Gate Skipped &bull; 0 Risk</span>`;
+                        outcomeHtml = formatLegOutcome(r.direction, "SKIP", 0, null);
                     } else if (l1) {
-                        const l1Pnl = (l1.pnl_net || 0) >= 0 ? "+$" + l1.pnl_net.toFixed(1) : "-$" + Math.abs(l1.pnl_net).toFixed(1);
-                        const l1Color = getOutcomeColor(l1.exit_reason, l1.pnl_net || 0);
-                        outcomeHtml = `<strong>${l1.exit_reason}</strong> &bull; Exit: $${l1.exit_price ? l1.exit_price.toFixed(1) : '—'} (<span style="color:${l1Color};">${l1Pnl}</span>)`;
+                        outcomeHtml = formatLegOutcome(l1.direction || r.direction, l1.exit_reason, l1.pnl_net, l1.exit_price);
                     }
 
                     tr.innerHTML = `
@@ -3592,16 +3640,12 @@
 
                     if (r.strat1) {
                         const s1Leg = r.strat1.legs && r.strat1.legs.length > 0 ? r.strat1.legs[0] : null;
-                        const s1PnlVal = s1Leg ? (s1Leg.pnl_net || 0) : (r.strat1.pnl_net || 0);
-                        const s1Pnl = s1PnlVal >= 0 ? "+$" + s1PnlVal.toFixed(1) : "-$" + Math.abs(s1PnlVal).toFixed(1);
-                        if (r.strat1.day_type === "SKIP") {
-                            s1Html = `<span style="color:var(--text-muted);">SKIP ($0.0)</span>`;
+                        if (r.strat1.day_type === "SKIP" || r.strat1.day_type === "TIE") {
+                            s1Html = formatLegOutcome(r.strat1.direction, r.strat1.day_type, 0, null);
                         } else if (s1Leg) {
-                            const s1Color = getOutcomeColor(s1Leg.exit_reason, s1PnlVal);
-                            s1Html = `<strong>${s1Leg.direction || '—'}</strong> ${s1Leg.exit_reason} (<span style="color:${s1Color};">${s1Pnl}</span>)`;
-                        } else {
-                            const s1Color = getOutcomeColor(r.strat1.day_type, s1PnlVal);
-                            s1Html = `<strong>${r.strat1.direction || '—'}</strong> ${r.strat1.day_type} (<span style="color:${s1Color};">${s1Pnl}</span>)`;
+                            s1Html = formatLegOutcome(s1Leg.direction || r.strat1.direction, s1Leg.exit_reason, s1Leg.pnl_net, s1Leg.exit_price);
+                        } else if (r.strat1.day_type) {
+                            s1Html = formatLegOutcome(r.strat1.direction, r.strat1.day_type, r.strat1.pnl_net, null);
                         }
                     }
 
@@ -3610,27 +3654,13 @@
                         const s2L2 = r.strat2.legs && r.strat2.legs.length > 1 ? r.strat2.legs[1] : null;
 
                         if (s2L1) {
-                            const l1PnlVal = s2L1.pnl_net || 0;
-                            const l1Pnl = l1PnlVal >= 0 ? "+$" + l1PnlVal.toFixed(1) : "-$" + Math.abs(l1PnlVal).toFixed(1);
-                            const l1Color = getOutcomeColor(s2L1.exit_reason, l1PnlVal);
-                            s2Html = `<strong>${s2L1.direction || '—'}</strong> ${s2L1.exit_reason} (<span style="color:${l1Color};">${l1Pnl}</span>)`;
-                        } else if (r.strat2.day_type === "DECAY") {
-                            s2Html = `<span class="badge" style="background:rgba(210,153,34,0.15);color:#d29922;border:1px solid #d29922;">${r.strat2.direction || '—'} DECAY</span> (<span style="color:var(--text-muted);">$0.0</span>)`;
-                        } else if (r.strat2.day_type === "EXPIRED") {
-                            s2Html = `<span class="badge" style="background:rgba(139,148,158,0.15);color:#8b949e;border:1px solid #8b949e;">${r.strat2.direction || '—'} EXPIRED</span> (<span style="color:var(--text-muted);">$0.0</span>)`;
-                        } else if (r.strat2.day_type === "TIE") {
-                            s2Html = `<span style="color:var(--text-muted);">TIE ($0.0)</span>`;
-                        } else {
-                            const s2Pnl = (r.strat2.pnl_net || 0) >= 0 ? "+$" + r.strat2.pnl_net.toFixed(1) : "-$" + Math.abs(r.strat2.pnl_net).toFixed(1);
-                            const s2Color = getOutcomeColor(r.strat2.day_type, r.strat2.pnl_net || 0);
-                            s2Html = `<strong>${r.strat2.direction || '—'}</strong> ${r.strat2.day_type} (<span style="color:${s2Color};">${s2Pnl}</span>)`;
+                            s2Html = formatLegOutcome(s2L1.direction || r.strat2.direction, s2L1.exit_reason, s2L1.pnl_net, s2L1.exit_price);
+                        } else if (r.strat2.day_type) {
+                            s2Html = formatLegOutcome(r.strat2.direction, r.strat2.day_type, r.strat2.pnl_net, null);
                         }
 
                         if (s2L2) {
-                            const l2PnlVal = s2L2.pnl_net || 0;
-                            const l2Pnl = l2PnlVal >= 0 ? "+$" + l2PnlVal.toFixed(1) : "-$" + Math.abs(l2PnlVal).toFixed(1);
-                            const l2Color = getOutcomeColor(s2L2.exit_reason, l2PnlVal);
-                            s2L2Html = `<strong>Flip ${s2L2.direction}</strong> ${s2L2.exit_reason} (<span style="color:${l2Color};">${l2Pnl}</span>)`;
+                            s2L2Html = formatLegOutcome(s2L2.direction, s2L2.exit_reason, s2L2.pnl_net, s2L2.exit_price, true);
                         }
                     }
 

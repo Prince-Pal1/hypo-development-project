@@ -7,11 +7,11 @@ to ensure rigorous Deflated Sharpe Ratio (DSR) and Probabilistic Sharpe Ratio (P
 import sqlite3
 import datetime as dt
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Union, Optional, Dict, Any
 
 
 class TrialLogger:
-    def __init__(self, db_path: Path | str = "hypotrader.db"):
+    def __init__(self, db_path: Union[Path, str] = "hypotrader.db"):
         self.db_path = str(db_path)
         self._init_table()
 

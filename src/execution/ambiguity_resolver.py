@@ -389,17 +389,71 @@ def _resolve_with_ohlc_heuristic(
     )
 
 
-def load_1min_dataframe(path: str) -> Optional[pd.DataFrame]:
+def load_1min_dataframe(path: str, reference_df: Optional[pd.DataFrame] = None) -> Optional[pd.DataFrame]:
     """
     Lazily load 1-minute data and prepare the _dt column.
-    Returns None if file doesn't exist.
+    If reference_df is provided, ensures the 1-minute data covers the reference range.
+    If missing or insufficient, it automatically triggers the download script.
     """
-    try:
-        df = pd.read_parquet(path)
-        if pd.api.types.is_numeric_dtype(df["timestamp"]):
-            df["_dt"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
+    import os
+    import math
+    import subprocess
+
+    def do_load():
+        try:
+            df_temp = pd.read_parquet(path)
+            if pd.api.types.is_numeric_dtype(df_temp["timestamp"]):
+                df_temp["_dt"] = pd.to_datetime(df_temp["timestamp"], unit="ms", utc=True)
+            else:
+                df_temp["_dt"] = pd.to_datetime(df_temp["timestamp"], utc=True)
+            return df_temp
+        except (FileNotFoundError, Exception):
+            return None
+
+    df = do_load()
+    needs_download = False
+    ref_min = None
+
+    if df is None:
+        needs_download = True
+    elif reference_df is not None and not reference_df.empty:
+        if "utc_time" in reference_df.columns:
+            ref_min = reference_df["utc_time"].min()
+        elif "timestamp" in reference_df.columns:
+            if pd.api.types.is_numeric_dtype(reference_df["timestamp"]):
+                ref_min = pd.to_datetime(reference_df["timestamp"], unit="ms", utc=True).min()
+            else:
+                ref_min = pd.to_datetime(reference_df["timestamp"], utc=True).min()
+                
+        if ref_min is not None:
+            df_min = df["_dt"].min()
+            if df_min > ref_min:
+                print(f"1m data starts at {df_min.date()}, but backtest needs {ref_min.date()}. Auto-downloading...")
+                needs_download = True
+
+    if needs_download:
+        print(f"1m data at {path} missing/incomplete. Starting auto-download (this may take a while)...")
+        years_to_download = 2.5
+        if ref_min is not None:
+            now = pd.Timestamp.utcnow()
+            days_ago = (now - ref_min).days
+            # Calculate years needed and round up to nearest 0.5
+            years_to_download = math.ceil((days_ago / 365.0) * 2) / 2.0
+            years_to_download = max(1.0, years_to_download)
+
+        venv_python = "/Users/prince/algo-trading/.venv/bin/python"
+        script_path = "/Users/prince/algo-trading/scripts/download_xauusd.py"
+        
+        if os.path.exists(venv_python) and os.path.exists(script_path):
+            try:
+                subprocess.run(
+                    [venv_python, script_path, "--timeframes", "1m", "--years", str(years_to_download)],
+                    check=True
+                )
+                df = do_load()  # Reload after download
+            except subprocess.CalledProcessError as e:
+                print(f"Failed to auto-download 1-minute data: {e}")
         else:
-            df["_dt"] = pd.to_datetime(df["timestamp"], utc=True)
-        return df
-    except (FileNotFoundError, Exception):
-        return None
+            print("Auto-download failed: Script or virtual environment not found.")
+
+    return df
