@@ -9,7 +9,7 @@ import datetime as dt
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Union, Optional, List, Dict, Any
 
 from src.session.engine import SessionEngine
 from src.core.risk_service import RiskService, RiskServiceLimits
@@ -27,9 +27,9 @@ optuna.logging.set_verbosity(optuna.logging.WARNING)
 class OptunaStudyEngine:
     def __init__(
         self,
-        parquet_path: Path | str,
+        parquet_path: Union[Path, str],
         study_name: str = "gold_sydney_range_study",
-        db_path: Path | str = "hypotrader.db",
+        db_path: Union[Path, str] = "hypotrader.db",
         cost_floor_gate: Optional[CostFloorGate] = None,
         risk_limits: Optional[RiskServiceLimits] = None,
     ):

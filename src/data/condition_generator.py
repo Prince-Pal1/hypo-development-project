@@ -7,7 +7,7 @@ historical data and enables SQL-style condition filtering ("create data given so
 from dataclasses import dataclass, asdict
 import datetime as dt
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Union, Optional, List, Dict, Any
 import pandas as pd
 import sqlite3
 
@@ -35,7 +35,7 @@ class ConditionGenerator:
     def __init__(
         self,
         session_engine: Optional[SessionEngine] = None,
-        db_path: Path | str = "hypotrader.db",
+        db_path: Union[Path, str] = "hypotrader.db",
     ):
         self.session_engine = session_engine or SessionEngine()
         self.db_path = str(db_path)
@@ -68,7 +68,7 @@ class ConditionGenerator:
 
     def generate_conditions_from_parquet(
         self,
-        parquet_path: Path | str,
+        parquet_path: Union[Path, str],
         start_date: Optional[dt.date] = None,
         end_date: Optional[dt.date] = None,
         x_offset: float = 3.5,

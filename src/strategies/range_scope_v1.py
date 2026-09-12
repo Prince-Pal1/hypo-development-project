@@ -78,8 +78,8 @@ class RangeScopeSignal:
 class RangeScopeStrategy:
     def __init__(
         self,
-        config: RangeScopeConfig | None = None,
-        risk_service: RiskService | None = None,
+        config: Optional[RangeScopeConfig] = None,
+        risk_service: Optional[RiskService] = None,
     ):
         self.config = config or RangeScopeConfig()
         eval_time_str = getattr(self.config, "eval_time_ist", "11:00") or "11:00"
@@ -168,7 +168,9 @@ class RangeScopeStrategy:
         context["scope"] = scope
 
         # Scope Gate: Scope must be >= scope_min_x
-        if scope < self.config.scope_min_x:
+        # Round to 1 decimal place to match UI display (toFixed(1)) and prevent
+        # floating-point precision disagreements (e.g. 4.97 displayed as "5.0")
+        if round(scope, 1) < self.config.scope_min_x:
             context["reason"] = "insufficient_scope"
             return None, context
 

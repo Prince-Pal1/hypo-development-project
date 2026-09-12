@@ -16,7 +16,7 @@ Generates an institutional-grade dark/light themed HTML performance report with:
 """
 
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Union, List, Dict, Any, Optional
 import datetime as dt
 import json
 import numpy as np
@@ -1627,7 +1627,7 @@ class ReportVisualizer:
         daily_equity_series: pd.Series,
         executed_chains: List[TradeChain],
         daily_chart_data: Optional[List[Dict[str, Any]]] = None,
-        output_filepath: Path | str = "hypotrader_report.html",
+        output_filepath: Union[Path, str] = "hypotrader_report.html",
     ) -> str:
         out_path = Path(output_filepath)
 

@@ -5,7 +5,7 @@ This module is deliberately isolated from the strategy and optimizer parameter m
 """
 
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Tuple, Optional
 
 
 @dataclass(frozen=True)
@@ -19,7 +19,7 @@ class RiskServiceLimits:
 
 
 class RiskService:
-    def __init__(self, limits: RiskServiceLimits | None = None):
+    def __init__(self, limits: Optional[RiskServiceLimits] = None):
         self.limits = limits or RiskServiceLimits()
         self.daily_realized_loss_pct = 0.0
 

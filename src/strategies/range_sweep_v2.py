@@ -66,9 +66,9 @@ class RangeSweepV2Signal:
 class RangeSweepV2Strategy:
     def __init__(
         self,
-        config: RangeSweepV2Config | None = None,
-        session_engine: SessionEngine | None = None,
-        risk_service: RiskService | None = None,
+        config: Optional[RangeSweepV2Config] = None,
+        session_engine: Optional[SessionEngine] = None,
+        risk_service: Optional[RiskService] = None,
     ):
         self.config = config or RangeSweepV2Config()
         if session_engine is None:
