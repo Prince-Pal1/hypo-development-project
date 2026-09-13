@@ -411,13 +411,17 @@ class WalkForwardOptimizer:
                     pass
 
         # Use the passed-in burn_in_windows cutoff to prevent nested-CV leakage into OOS
-        burn_in = max(1, burn_in_windows)
+        inner_burn = max(1, burn_in_windows // 2)
         
         lambda_scores = {lam: 0.0 for lam in lambdas}
         
         for lam in lambdas:
             cumulative_score = 0.0
-            for test_idx in range(burn_in, len(self.windows)):
+            last_params = None
+            
+            for test_idx in range(inner_burn, burn_in_windows):
+                assert test_idx < burn_in_windows, f"Lambda CV test_idx {test_idx} leaked into outer OOS cutoff {burn_in_windows}"
+                
                 hist_windows = self.windows[:test_idx]
                 test_window = self.windows[test_idx]
                 
@@ -426,7 +430,14 @@ class WalkForwardOptimizer:
                 
                 # Evaluate on the test window
                 score = self._evaluate_param_on_window(chosen_params, test_window)
+                
+                # Turn-over / Switching penalty objective to prevent whipsaw
+                if last_params is not None and chosen_params != last_params:
+                    # Realistic execution/slippage cost for changing params mid-stream
+                    score -= 0.1
+                
                 cumulative_score += score
+                last_params = chosen_params
                 
             lambda_scores[lam] = cumulative_score
             

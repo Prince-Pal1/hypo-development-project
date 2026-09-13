@@ -63,6 +63,8 @@ def evaluate_params_on_window(
     # Filter data for the date range
     window_df = df_5m[(df_5m["utc_time"].dt.date >= start_date) & (df_5m["utc_time"].dt.date <= end_date)]
     unique_dates = sorted(window_df["utc_time"].dt.date.unique())
+    # Ensure Sunday inflation is fixed by strictly selecting weekdays
+    unique_dates = [d for d in unique_dates if d.weekday() < 5]
 
     account_equity = 50000.0
     daily_returns = []
