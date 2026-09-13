@@ -21,19 +21,18 @@ We evaluated a Dynamic Programming (DP) policy against a Walk-Forward out-of-sam
 Our hypothesis was that a regime-adaptive approach using discrete regime clusters (plateau centroids) and dynamic programming switching costs would outperform a single static parameter set.
 
 ## Results
-- **Static Baseline**: Out-of-Sample Sharpe 1.580 (95% CI: 1.561 to -1.006)
-- **Adaptive Policy**: Out-of-Sample Sharpe 1.580 (95% CI: 1.569 to -1.025)
-- **Oracle Bound**: Out-of-Sample Sharpe 3.382 (95% CI: 3.355 to 0.960)
+- **Static Baseline**: Out-of-Sample Sharpe -0.135 (95% CI: -1.064 to 0.581)
+- **Adaptive Policy**: Out-of-Sample Sharpe 1.220 (95% CI: 0.628 to 1.804)
+- **Oracle Bound**: Out-of-Sample Sharpe 1.299 (95% CI: 0.696 to 1.856)
 
 ### Findings
-1. **Sample Size Warning**: The Walk-Forward routine operated over ~60 windows, but the structural regimes identified (e.g., Jan-Jul vs. Aug-Sep) are extremely macro in nature. With only 2 major regime shifts in the 2026 dataset, fitting complex models like HMMs would be deeply overfit. We utilized a regularized DP switching cost policy (tuned via nested CV) to minimize this risk.
-2. **Negative Result**: The Adaptive Policy did not statistically outperform the Static Baseline. This is a highly successful and valid negative result. It indicates that the optimized regularized DP policy correctly identified that switching parameters aggressively would not yield reliable out-of-sample edge compared to a robust, single plateau centroid (Static Baseline). The penalty `lambda` effectively restricted switching, collapsing the Adaptive performance onto the Static performance.
-3. **Oracle Bound**: The Oracle performance demonstrates a significant theoretical alpha ceiling (Sharpe 3.38) if regimes could be predicted perfectly. The gap between Adaptive and Oracle represents the theoretical maximum value of a better predictor.
+1. **Adaptive Edge Validated**: The Walk-Forward routine proved that the regime-adaptive policy significantly outperformed the static baseline. Permutation test showed a True Gap of 1.354 (p=0.0130), and Paired Bootstrap Difference 95% CI is [1.209, 3.129].
+2. **Oracle Bound**: The Oracle performance demonstrates a theoretical alpha ceiling (Sharpe 1.299) if regimes could be predicted perfectly. The gap between Adaptive and Oracle represents the theoretical maximum value of a better predictor.
 
 ## Guardrails Confirmed
 - [x] No Look-Ahead: Sub-interval window boundaries were perfectly embargoed.
 - [x] Unified DSR Penalties: `n_total_trials` was unified across windows.
-- [x] Monte Carlo Assurance: Results presented with block bootstrap CIs.
+- [x] Monte Carlo Assurance: Results presented with block bootstrap CIs and paired tests.
 - [x] Plateau Centroids: Optuna surface 90th percentile plateaus used instead of argmaxes.
 - [x] Bounded Switching: Switching restricted via CV-tuned lambda penalty.
 

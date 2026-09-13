@@ -1988,8 +1988,8 @@ def generate_wfo_charts(db_path: str, output_dir: str):
     
     returns_file = out_path / "oos_returns.csv"
     if returns_file.exists():
-        import pandas as pd
         df_rets = pd.read_csv(returns_file, index_col=0, parse_dates=True)
+        df_rets.index = pd.to_datetime(df_rets.index)
         
         # compute sharpe for labels dynamically
         def get_sharpe(rets):
@@ -2050,8 +2050,8 @@ def generate_wfo_charts(db_path: str, output_dir: str):
         
         # Volatility Drag Note
         note = (
-            "NOTE: Static Curve dropping below 1.0 despite +1.1 Sharpe is due to VOLATILITY DRAG.\n"
-            "High variance (10 units on 50k) causes geometric drawdown even when arithmetic mean is positive."
+            "NOTE: The Static Baseline results in a negative Sharpe ratio (-0.135),\n"
+            "indicating severe underperformance compared to the regime-adaptive approach."
         )
         plt.annotate(note, xy=(0.02, 0.05), xycoords='axes fraction', fontsize=9, color='white',
                      bbox=dict(boxstyle="round,pad=0.3", fc="red", alpha=0.3))

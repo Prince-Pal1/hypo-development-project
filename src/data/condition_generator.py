@@ -124,8 +124,17 @@ class ConditionGenerator:
         start = start_date or min_dt
         end = end_date or max_dt
 
-        # Hardcoded 2026 FOMC and NFP logic for backtesting
-        fomc_2026 = {
+        # Hardcoded 2024-2026 FOMC and NFP logic for backtesting
+        fomc_dates = {
+            # 2024
+            dt.date(2024, 1, 31), dt.date(2024, 3, 20), dt.date(2024, 5, 1),
+            dt.date(2024, 6, 12), dt.date(2024, 7, 31), dt.date(2024, 9, 18),
+            dt.date(2024, 11, 7), dt.date(2024, 12, 18),
+            # 2025
+            dt.date(2025, 1, 29), dt.date(2025, 3, 19), dt.date(2025, 5, 7),
+            dt.date(2025, 6, 18), dt.date(2025, 7, 30), dt.date(2025, 9, 17),
+            dt.date(2025, 10, 29), dt.date(2025, 12, 10),
+            # 2026
             dt.date(2026, 1, 28), dt.date(2026, 3, 18), dt.date(2026, 4, 29),
             dt.date(2026, 6, 17), dt.date(2026, 7, 29), dt.date(2026, 9, 16),
             dt.date(2026, 11, 4), dt.date(2026, 12, 16)
@@ -140,7 +149,7 @@ class ConditionGenerator:
         records: List[MarketConditionRecord] = []
 
         for target_date in dates_range:
-            is_event = (target_date in fomc_2026) or is_nfp(target_date)
+            is_event = (target_date in fomc_dates) or is_nfp(target_date)
             window: SessionWindow = self.session_engine.get_session_window(target_date)
 
             # Slice session bars

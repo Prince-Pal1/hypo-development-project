@@ -108,6 +108,52 @@ def permutation_test_regime_effect(
     p_value = count_exceed / num_permutations
     return observed_diff, p_value
 
+def paired_bootstrap_test_regime_effect(
+    returns_regime_a: np.ndarray,
+    returns_regime_b: np.ndarray,
+    metric_func: Callable[[np.ndarray], float],
+    num_paths: int = 1000,
+    block_size: int = 10,
+    alpha: float = 0.05,
+    seed: Optional[int] = None
+) -> Tuple[float, float, float]:
+    """
+    Perform a paired block bootstrap test on the difference between two regimes.
+    Bootstraps the paired difference array and computes the confidence interval of the metric difference.
+    Returns (mean_diff, lower_bound, upper_bound).
+    """
+    if seed is not None:
+        np.random.seed(seed)
+        
+    diff = returns_regime_a - returns_regime_b
+    n = len(diff)
+    
+    if n == 0:
+        return 0.0, 0.0, 0.0
+        
+    # Pre-compute blocks
+    num_blocks = (n + block_size - 1) // block_size
+    blocks = [diff[i:i+block_size] for i in range(0, n, block_size)]
+    
+    paths = np.zeros((num_paths, n))
+    for i in range(num_paths):
+        sampled_blocks_idx = np.random.choice(len(blocks), size=num_blocks * 2, replace=True)
+        sampled_diffs = np.concatenate([blocks[idx] for idx in sampled_blocks_idx])
+        paths[i] = sampled_diffs[:n]
+        
+    metrics = np.array([metric_func(path) for path in paths])
+    metrics = metrics[np.isfinite(metrics)]
+    
+    if len(metrics) == 0:
+        return 0.0, 0.0, 0.0
+        
+    return (
+        float(np.mean(metrics)),
+        float(np.percentile(metrics, alpha/2 * 100)),
+        float(np.percentile(metrics, (1 - alpha/2) * 100))
+    )
+
+
 def simulate_ruin_risk(
     bootstrap_paths: np.ndarray,
     initial_capital: float = 50000.0,
