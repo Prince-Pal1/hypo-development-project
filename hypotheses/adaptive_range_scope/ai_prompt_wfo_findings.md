@@ -35,7 +35,7 @@ With mathematical rigor restored, the DP model triggers adaptive policy switches
 3. **Next Steps:** Future research should focus on replacing the trailing DP trigger with *leading* macroeconomic indicators (e.g., Volatility regimes, ADX expansions, event-day boolean flags) to potentially exceed the historical Oracle Bound by anticipating shifts rather than reacting to them.
 
 ## 5. Visual Evidence & Observations
-The WFO generated 6 key charts. Below are the analytical observations for each:
+The WFO generated 6 key interactive Plotly HTML charts (migrated from static PNGs to allow deep zoom and precise parameter inspection on hover). Below are the analytical observations for each:
 
 **Chart 1 (Response Surface Heatmaps):** The response surface heatmap reveals the fitness landscape mapping Stop Loss (SL) points vs Take Profit (TP) offset Y. It visualizes the high-Sharpe "plateau" regions where parameters are stable, rather than isolated brittle peaks.
 
