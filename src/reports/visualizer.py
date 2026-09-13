@@ -1946,9 +1946,31 @@ def generate_wfo_charts(db_path: str, output_dir: str):
     
     # 4. Regime-regression scatters
     plt.figure(figsize=(10, 6))
-    if 'trades_count' in df.columns:
-        sns.regplot(data=df, x='trades_count', y='sharpe_ratio', scatter_kws={'alpha':0.3}, line_kws={'color':'red'})
-    plt.title("Regime-Regression Scatters (Trades vs Sharpe)")
+    if 'sub_interval_start' in df.columns and 'sub_interval_end' in df.columns:
+        best_per_interval = df.loc[df.groupby('sub_interval_id')['sharpe_ratio'].idxmax()].copy()
+        vols = []
+        for idx, row in best_per_interval.iterrows():
+            try:
+                query = "SELECT AVG(parkinson_volatility) as vol FROM market_conditions WHERE date >= ? AND date <= ?"
+                vol_df = pd.read_sql_query(query, conn, params=(row['sub_interval_start'], row['sub_interval_end']))
+                vols.append(vol_df.iloc[0]['vol'] if not pd.isna(vol_df.iloc[0]['vol']) else np.nan)
+            except Exception:
+                vols.append(np.nan)
+        best_per_interval['volatility'] = vols
+        best_per_interval = best_per_interval.dropna(subset=['volatility', 'tp_offset_y'])
+        
+        if len(best_per_interval) > 3:
+            sns.regplot(data=best_per_interval, x='volatility', y='tp_offset_y', scatter_kws={'alpha':0.8}, line_kws={'color':'red'}, order=2)
+            plt.title("Regime-Regression: Window Volatility vs Optimal TP Offset")
+            plt.xlabel("Average Parkinson Volatility")
+            plt.ylabel("Optimal TP Offset (y*)")
+        else:
+            plt.text(0.5, 0.5, 'Insufficient Volatility Data', ha='center')
+            plt.title("Data Quality Diagnostic (Trades vs Sharpe)")
+    else:
+        if 'trades_count' in df.columns:
+            sns.regplot(data=df, x='trades_count', y='sharpe_ratio', scatter_kws={'alpha':0.3}, line_kws={'color':'red'})
+        plt.title("Data Quality Diagnostic (Trades vs Sharpe)")
     plt.tight_layout()
     plt.savefig(out_path / "4_regime_regression_scatters.png", dpi=150)
     plt.close()
@@ -1975,6 +1997,19 @@ def generate_wfo_charts(db_path: str, output_dir: str):
             std_r = rets.std(ddof=1)
             return (mean_r / std_r) * np.sqrt(252) if std_r > 0 else 0.0
             
+        def bootstrap_bands(rets, num_paths=200, block_size=5):
+            arr = rets.values
+            n = len(arr)
+            paths = []
+            for _ in range(num_paths):
+                path = []
+                while len(path) < n:
+                    idx = np.random.randint(0, max(1, n - block_size))
+                    path.extend(arr[idx:idx+block_size])
+                paths.append((1 + np.array(path[:n])).cumprod())
+            paths = np.array(paths)
+            return np.percentile(paths, 10, axis=0), np.percentile(paths, 90, axis=0)
+            
         sharpe_stat = get_sharpe(df_rets['static'])
         sharpe_adap = get_sharpe(df_rets['adaptive'])
         sharpe_orac = get_sharpe(df_rets['oracle'])
@@ -1987,7 +2022,13 @@ def generate_wfo_charts(db_path: str, output_dir: str):
         plt.plot(adaptive_eq.index, adaptive_eq, label=f'Adaptive Policy (Sharpe {sharpe_adap:.3f})', color='orange', linestyle='--')
         plt.plot(oracle_eq.index, oracle_eq, label=f'Oracle Bound (Sharpe {sharpe_orac:.3f})', color='green')
         
-        plt.fill_between(static_eq.index, static_eq * 0.98, static_eq * 1.02, color='blue', alpha=0.1)
+        s_low, s_high = bootstrap_bands(df_rets['static'])
+        a_low, a_high = bootstrap_bands(df_rets['adaptive'])
+        o_low, o_high = bootstrap_bands(df_rets['oracle'])
+        
+        plt.fill_between(static_eq.index, s_low, s_high, color='blue', alpha=0.1)
+        plt.fill_between(adaptive_eq.index, a_low, a_high, color='orange', alpha=0.1)
+        plt.fill_between(oracle_eq.index, o_low, o_high, color='green', alpha=0.1)
         
         switch_file = out_path / "switch_dates.txt"
         if switch_file.exists():
@@ -2000,13 +2041,21 @@ def generate_wfo_charts(db_path: str, output_dir: str):
                 if len(idx) > 0:
                     plt.scatter(idx[0], adaptive_eq.loc[idx[0]], color='red', marker='*', s=80, zorder=5)
             
-            # Add proxy for legend
             if switch_dates:
                 plt.scatter([], [], color='red', marker='*', s=80, label='Policy Switch')
         
         plt.title("Overlaid Out-of-Sample Equity Curves (Exact Real Returns)")
         plt.xlabel("Date")
         plt.ylabel("Cumulative Equity")
+        
+        # Volatility Drag Note
+        note = (
+            "NOTE: Static Curve dropping below 1.0 despite +1.1 Sharpe is due to VOLATILITY DRAG.\n"
+            "High variance (10 units on 50k) causes geometric drawdown even when arithmetic mean is positive."
+        )
+        plt.annotate(note, xy=(0.02, 0.05), xycoords='axes fraction', fontsize=9, color='white',
+                     bbox=dict(boxstyle="round,pad=0.3", fc="red", alpha=0.3))
+                     
         plt.legend()
         plt.xticks(rotation=45)
         plt.tight_layout()
