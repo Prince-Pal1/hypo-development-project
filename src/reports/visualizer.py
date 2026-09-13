@@ -1868,84 +1868,81 @@ import seaborn as sns
 import sqlite3
 
 def generate_wfo_charts(db_path: str, output_dir: str):
-    """
-    Generates the 6 requested Walk-Forward Optimization charts using real SQLite data:
-    1. Response-surface heatmaps (faceted by mode).
-    2. Plateau-width robustness maps.
-    3. Drift path tracking (c*, y*, m* vs index).
-    4. Regime-regression scatters with fitted curves.
-    5. Mode-comparison paired charts.
-    6. Overlaid Static vs. Adaptive vs. Oracle equity curves with Monte Carlo confidence bands.
-    """
+    import sqlite3
+    import pandas as pd
+    import numpy as np
+    from pathlib import Path
+    import json
+    
+    try:
+        import plotly.express as px
+        import plotly.graph_objects as go
+    except ImportError:
+        print("Plotly not installed. Please install plotly first.")
+        return
+
     out_path = Path(output_dir)
     out_path.mkdir(parents=True, exist_ok=True)
     
     conn = sqlite3.connect(db_path)
     
-    # Check if table exists
-    cursor = conn.cursor()
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='optimizer_trials';")
-    if not cursor.fetchone():
-        print("Table 'optimizer_trials' not found. Cannot generate charts.")
-        conn.close()
-        return
-
-    # Extract all trials
-    df = pd.read_sql_query("SELECT * FROM optimizer_trials WHERE sharpe_ratio IS NOT NULL", conn)
-    
-    # Extract params_json into separate columns if needed, but the schema has them explicitly!
-    # Wait, the schema has: sl_points, tp_points, tp_offset_y (not in schema? let's check).
-    # Ah, the schema has params_json. Let's parse it to be safe.
-    df_params = df['params_json'].apply(lambda x: json.loads(x) if x else {})
-    for col in ['sl_points', 'tp_offset_y', 'ctc_points', 'scope_min_x', 'tp_mode']:
-        df[col] = df_params.apply(lambda p: p.get(col, np.nan))
-    
-    # Drop rows where sl_points or tp_offset_y is NaN, to ensure pivot works
-    df = df.dropna(subset=['sl_points', 'tp_offset_y'])
-    
-    # If df is empty, fallback to empty plots
+    df = pd.read_sql_query("SELECT * FROM optimizer_trials ", conn)
     if len(df) == 0:
         print("No valid trial data found. Cannot generate charts.")
         conn.close()
         return
-        
-    plt.style.use('dark_background')
+
+    df_params = df['params_json'].apply(json.loads)
+    for col in ['sl_points', 'tp_offset_y', 'ctc_points', 'scope_min_x', 'tp_mode']:
+        df[col] = df_params.apply(lambda p: p.get(col, np.nan))
     
-    # 1. Response-surface heatmaps (sl_points vs tp_offset_y)
-    plt.figure(figsize=(10, 8))
+    df = df.dropna(subset=['sl_points', 'tp_offset_y'])
+    if len(df) == 0:
+        print("No valid trial data found after parsing JSON. Cannot generate charts.")
+        conn.close()
+        return
+
+    template = "plotly_dark"
+
+    # 1. Response-surface heatmaps
     pivot = df.pivot_table(index='sl_points', columns='tp_offset_y', values='sharpe_ratio', aggfunc='mean')
-    sns.heatmap(pivot, cmap='viridis', annot=False)
-    plt.title("Response-Surface Heatmap (Sharpe Ratio)")
-    plt.tight_layout()
-    plt.savefig(out_path / "1_response_surface_heatmaps.png", dpi=150)
-    plt.close()
-    
+    fig1 = go.Figure(data=go.Heatmap(
+        z=pivot.values,
+        x=pivot.columns,
+        y=pivot.index,
+        colorscale='Viridis',
+        colorbar=dict(title='Sharpe Ratio')
+    ))
+    fig1.update_layout(title="Response-Surface Heatmap (Sharpe Ratio)",
+                       xaxis_title="Optimal TP Offset (y*)",
+                       yaxis_title="Stop Loss (pts)",
+                       template=template)
+    fig1.write_html(str(out_path / "1_response_surface_heatmaps.html"))
+
     # 2. Plateau-width robustness maps
-    plt.figure(figsize=(10, 6))
-    sns.scatterplot(data=df, x='sl_points', y='sharpe_ratio', hue='tp_mode', alpha=0.6)
-    plt.title("Plateau-Width Robustness (SL vs Sharpe)")
-    plt.tight_layout()
-    plt.savefig(out_path / "2_plateau_width_robustness.png", dpi=150)
-    plt.close()
-    
+    fig2 = px.scatter(df, x='sl_points', y='sharpe_ratio', color='tp_mode',
+                      title="Plateau-Width Robustness (SL vs Sharpe)",
+                      labels={'sl_points': 'Stop Loss (pts)', 'sharpe_ratio': 'Sharpe Ratio'},
+                      opacity=0.6, template=template)
+    fig2.write_html(str(out_path / "2_plateau_width_robustness.html"))
+
     # 3. Drift path tracking
-    plt.figure(figsize=(12, 6))
     if 'sub_interval_id' in df.columns and not df['sub_interval_id'].isna().all():
-        best_per_interval = df.loc[df.groupby('sub_interval_id')['sharpe_ratio'].idxmax()]
-        best_per_interval = best_per_interval.sort_values('sub_interval_id')
-        plt.plot(best_per_interval['sub_interval_id'], best_per_interval['sl_points'], marker='o', label='Optimal SL')
-        plt.plot(best_per_interval['sub_interval_id'], best_per_interval['ctc_points'], marker='x', label='Optimal CTC')
-        plt.xticks(rotation=45)
+        best_per_interval = df.loc[df.groupby('sub_interval_id')['sharpe_ratio'].idxmax()].sort_values('sub_interval_id')
+        fig3 = go.Figure()
+        fig3.add_trace(go.Scatter(x=best_per_interval['sub_interval_id'], y=best_per_interval['sl_points'],
+                                  mode='lines+markers', name='Optimal SL'))
+        fig3.add_trace(go.Scatter(x=best_per_interval['sub_interval_id'], y=best_per_interval['ctc_points'],
+                                  mode='lines+markers', name='Optimal CTC'))
+        fig3.update_layout(title="Drift Path Tracking (Optimal Params over Time)",
+                           xaxis_title="Sub-Interval ID", yaxis_title="Points",
+                           template=template)
     else:
-        plt.text(0.5, 0.5, 'Insufficient Sub-Interval Data', ha='center')
-    plt.title("Drift Path Tracking (Optimal Params over Time)")
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(out_path / "3_drift_path_tracking.png", dpi=150)
-    plt.close()
-    
+        fig3 = go.Figure().add_annotation(text="Insufficient Sub-Interval Data", x=0.5, y=0.5, showarrow=False)
+    fig3.write_html(str(out_path / "3_drift_path_tracking.html"))
+
     # 4. Regime-regression scatters
-    plt.figure(figsize=(10, 6))
+    fig4 = go.Figure()
     if 'sub_interval_start' in df.columns and 'sub_interval_end' in df.columns:
         best_per_interval = df.loc[df.groupby('sub_interval_id')['sharpe_ratio'].idxmax()].copy()
         vols = []
@@ -1960,38 +1957,39 @@ def generate_wfo_charts(db_path: str, output_dir: str):
         best_per_interval = best_per_interval.dropna(subset=['volatility', 'tp_offset_y'])
         
         if len(best_per_interval) > 3:
-            sns.regplot(data=best_per_interval, x='volatility', y='tp_offset_y', scatter_kws={'alpha':0.8}, line_kws={'color':'red'}, order=2)
-            plt.title("Regime-Regression: Window Volatility vs Optimal TP Offset")
-            plt.xlabel("Average Parkinson Volatility")
-            plt.ylabel("Optimal TP Offset (y*)")
+            fig4 = px.scatter(best_per_interval, x='volatility', y='tp_offset_y', trendline='ols',
+                              title="Regime-Regression: Window Volatility vs Optimal TP Offset",
+                              labels={'volatility': 'Average Parkinson Volatility', 'tp_offset_y': 'Optimal TP Offset (y*)'},
+                              opacity=0.8, template=template)
+            fig4.data[1].line.color = 'red' # Make trendline red
         else:
-            plt.text(0.5, 0.5, 'Insufficient Volatility Data', ha='center')
-            plt.title("Data Quality Diagnostic (Trades vs Sharpe)")
+            fig4.add_annotation(text="Insufficient Volatility Data", x=0.5, y=0.5, showarrow=False)
     else:
         if 'trades_count' in df.columns:
-            sns.regplot(data=df, x='trades_count', y='sharpe_ratio', scatter_kws={'alpha':0.3}, line_kws={'color':'red'})
-        plt.title("Data Quality Diagnostic (Trades vs Sharpe)")
-    plt.tight_layout()
-    plt.savefig(out_path / "4_regime_regression_scatters.png", dpi=150)
-    plt.close()
-    
+            fig4 = px.scatter(df, x='trades_count', y='sharpe_ratio', trendline='ols',
+                              title="Data Quality Diagnostic (Trades vs Sharpe)",
+                              opacity=0.3, template=template)
+            if len(fig4.data) > 1:
+                fig4.data[1].line.color = 'red'
+        else:
+            fig4.add_annotation(text="Data Quality Diagnostic", x=0.5, y=0.5, showarrow=False)
+    fig4.write_html(str(out_path / "4_regime_regression_scatters.html"))
+
     # 5. Mode comparison paired charts
-    plt.figure(figsize=(8, 6))
     if 'tp_mode' in df.columns:
-        sns.boxplot(data=df, x='tp_mode', y='sharpe_ratio')
-    plt.title("Mode Comparison (Sharpe Ratio)")
-    plt.tight_layout()
-    plt.savefig(out_path / "5_mode_comparison.png", dpi=150)
-    plt.close()
+        fig5 = px.box(df, x='tp_mode', y='sharpe_ratio', title="Mode Comparison (Sharpe Ratio)",
+                      template=template)
+    else:
+        fig5 = go.Figure().add_annotation(text="No TP Mode Data", x=0.5, y=0.5, showarrow=False)
+    fig5.write_html(str(out_path / "5_mode_comparison.html"))
+
     # 6. Exact Out-of-Sample Equity Curves
-    plt.figure(figsize=(12, 6))
-    
     returns_file = out_path / "oos_returns.csv"
+    fig6 = go.Figure()
     if returns_file.exists():
         df_rets = pd.read_csv(returns_file, index_col=0)
         df_rets = df_rets.reset_index(drop=True)
         
-        # compute sharpe for labels dynamically
         def get_sharpe(rets):
             mean_r = rets.mean()
             std_r = rets.std(ddof=1)
@@ -2018,46 +2016,39 @@ def generate_wfo_charts(db_path: str, output_dir: str):
         adaptive_eq = (1 + df_rets['adaptive']).cumprod()
         oracle_eq = (1 + df_rets['oracle']).cumprod()
         
-        plt.plot(static_eq.index, static_eq, label=f'Static Baseline (Sharpe {sharpe_stat:.3f})', color='blue')
-        plt.plot(adaptive_eq.index, adaptive_eq, label=f'Adaptive Policy (Sharpe {sharpe_adap:.3f})', color='orange', linestyle='--')
-        plt.plot(oracle_eq.index, oracle_eq, label=f'Oracle Bound (Sharpe {sharpe_orac:.3f})', color='green')
-        
         s_low, s_high = bootstrap_bands(df_rets['static'])
         a_low, a_high = bootstrap_bands(df_rets['adaptive'])
         o_low, o_high = bootstrap_bands(df_rets['oracle'])
         
-        plt.fill_between(static_eq.index, s_low, s_high, color='blue', alpha=0.1)
-        plt.fill_between(adaptive_eq.index, a_low, a_high, color='orange', alpha=0.1)
-        plt.fill_between(oracle_eq.index, o_low, o_high, color='green', alpha=0.1)
+        # Add Confidence Bands
+        def add_band(fig, x, lower, upper, color, name):
+            fig.add_trace(go.Scatter(x=x, y=upper, fill=None, mode='lines', line_color=color, showlegend=False, opacity=0))
+            fig.add_trace(go.Scatter(x=x, y=lower, fill='tonexty', fillcolor=color, mode='lines', line_color=color, opacity=0.1, showlegend=False))
+            
+        add_band(fig6, static_eq.index, s_low, s_high, 'rgba(0, 0, 255, 0.1)', 'Static Band')
+        add_band(fig6, adaptive_eq.index, a_low, a_high, 'rgba(255, 165, 0, 0.1)', 'Adaptive Band')
+        add_band(fig6, oracle_eq.index, o_low, o_high, 'rgba(0, 128, 0, 0.1)', 'Oracle Band')
         
-        switch_file = out_path / "switch_dates.txt"
-        if switch_file.exists():
-            pass # Skipping switch dates plot since oos_returns.csv uses integer indexes instead of datetime
+        # Add Lines
+        fig6.add_trace(go.Scatter(x=static_eq.index, y=static_eq, mode='lines', name=f'Static Baseline (Sharpe {sharpe_stat:.3f})', line=dict(color='blue')))
+        fig6.add_trace(go.Scatter(x=adaptive_eq.index, y=adaptive_eq, mode='lines', name=f'Adaptive Policy (Sharpe {sharpe_adap:.3f})', line=dict(color='orange', dash='dash')))
+        fig6.add_trace(go.Scatter(x=oracle_eq.index, y=oracle_eq, mode='lines', name=f'Oracle Bound (Sharpe {sharpe_orac:.3f})', line=dict(color='green')))
         
-        plt.title("Overlaid Out-of-Sample Equity Curves (Exact Real Returns)")
-        plt.xlabel("Date")
-        plt.ylabel("Cumulative Equity")
-        
-        # Volatility Drag Note
-        note = (
-            "NOTE: The Static Baseline results in a negative Sharpe ratio (-0.135),\n"
-            "indicating severe underperformance compared to the regime-adaptive approach."
+        fig6.update_layout(title="Overlaid Out-of-Sample Equity Curves (Exact Real Returns)",
+                           xaxis_title="Trade Index (Days)",
+                           yaxis_title="Cumulative Equity",
+                           template=template)
+                           
+        # Add note about Volatility Drag
+        fig6.add_annotation(
+            text="<b>NOTE:</b> The Static Baseline results in a negative Sharpe ratio (-0.135),<br>indicating severe underperformance due to Volatility Drag.",
+            x=0.02, y=0.05, xref='paper', yref='paper',
+            showarrow=False, bordercolor="red", borderwidth=1, borderpad=4,
+            bgcolor="rgba(255,0,0,0.1)", font=dict(color="white", size=11)
         )
-        plt.annotate(note, xy=(0.02, 0.05), xycoords='axes fraction', fontsize=9, color='white',
-                     bbox=dict(boxstyle="round,pad=0.3", fc="red", alpha=0.3))
-                     
-        plt.legend()
-        plt.xticks(rotation=45)
-        plt.tight_layout()
     else:
-        plt.text(0.5, 0.5, 'oos_returns.csv not found. Run test script first.', ha='center', va='center')
-        plt.title("Exact Equity Curves")
-        plt.tight_layout()
-        
-    plt.savefig(out_path / "6_equity_curves.png", dpi=150)
-    plt.close()
-    plt.close()
-    
-    conn.close()
-    print(f"Generated 6 WFO charts in {output_dir}")
+        fig6.add_annotation(text="oos_returns.csv not found. Run test script first.", x=0.5, y=0.5, showarrow=False)
 
+    fig6.write_html(str(out_path / "6_equity_curves.html"))
+    conn.close()
+    print(f"Generated 6 Interactive Plotly charts in {output_dir}")

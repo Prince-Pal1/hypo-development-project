@@ -37,13 +37,13 @@ Our hypothesis was that a regime-adaptive approach using discrete regime cluster
 - [x] Bounded Switching: Switching restricted via CV-tuned lambda penalty.
 
 ## Charts
-The following charts are generated in this directory:
-- 1_response_surface_heatmaps.png
-- 2_plateau_width_robustness.png
-- 3_drift_path_tracking.png
-- 4_regime_regression_scatters.png
-- 5_mode_comparison.png
-- 6_equity_curves.png
+The following interactive Plotly charts are generated in this directory:
+- [1_response_surface_heatmaps.html](1_response_surface_heatmaps.html)
+- [2_plateau_width_robustness.html](2_plateau_width_robustness.html)
+- [3_drift_path_tracking.html](3_drift_path_tracking.html)
+- [4_regime_regression_scatters.html](4_regime_regression_scatters.html)
+- [5_mode_comparison.html](5_mode_comparison.html)
+- [6_equity_curves.html](6_equity_curves.html)
 """
     
     with open(output_dir / "regime_adaptive_report.md", "w") as f:
