@@ -30,7 +30,8 @@ def evaluate_params_on_window(
     # Extract params with defaults
     sl_points = params.get("sl_points", 10.0)
     tp_offset_y = params.get("tp_offset_y", 3.5)
-    ctc_points = params.get("ctc_points", 10.0)
+    ctc_enabled = params.get("ctc_enabled", True)
+    ctc_points = params.get("ctc_points", 10.0) if ctc_enabled else 1000.0
     tp_mode = params.get("tp_mode", "mode_1_dynamic")
     scope_min_x = params.get("scope_min_x", 5.0)
 
@@ -78,7 +79,7 @@ def evaluate_params_on_window(
         account_equity += trade.pnl_net
 
     if len(daily_returns) < 3:
-        return 0.0, 0.0, 0.0, 0, pd.Series(dtype=float)
+        return -np.inf, 0.0, 0.0, 0, pd.Series(dtype=float)
 
     arr = np.array(daily_returns)
     mean_ret = float(np.mean(arr))
@@ -94,6 +95,8 @@ def evaluate_params_on_window(
     max_dd = float(np.max(drawdowns)) if len(drawdowns) > 0 else 0.0
     
     trades_count = int(np.sum(arr != 0.0))
+    if trades_count == 0:
+        return -np.inf, 0.0, max_dd, 0, pd.Series(daily_returns)
     
     return sharpe, ann_ret, max_dd, trades_count, pd.Series(daily_returns)
 
@@ -116,13 +119,11 @@ def run_walk_forward_validation():
     
     def engine_factory(study_name, sub_interval_id, sub_interval_start, sub_interval_end):
         def suggest_params(trial):
-            # Decide whether to use the CTC filter at all (1000 = effectively disabled)
-            disable_ctc = trial.suggest_categorical("disable_ctc", [True, False])
-            
             return {
                 "sl_points": trial.suggest_float("sl_points", 5.0, 20.0, step=1.0),
                 "tp_offset_y": trial.suggest_float("tp_offset_y", 1.0, 10.0, step=0.5),
-                "ctc_points": 1000.0 if disable_ctc else trial.suggest_float("ctc_points", 5.0, 20.0, step=1.0),
+                "ctc_enabled": trial.suggest_categorical("ctc_enabled", [True, False]),
+                "ctc_points": trial.suggest_float("ctc_points", 5.0, 20.0, step=1.0),
                 "scope_min_x": trial.suggest_float("scope_min_x", 0.0, 10.0, step=1.0),
                 "tp_mode": trial.suggest_categorical("tp_mode", ["mode_1_dynamic", "mode_2_wait_1230"])
             }
@@ -147,7 +148,7 @@ def run_walk_forward_validation():
         study_prefix="WFO_RangeScope",
         engine_factory=engine_factory,
         n_trials_per_window=251,
-        window_size_days=10,
+        window_size_days=60,
         step_size_days=10,
         min_start_date=min_start_date_1m,
     )
@@ -228,6 +229,36 @@ def run_walk_forward_validation():
     report_performance("Static Baseline", static_returns)
     report_performance("Adaptive Policy", adaptive_returns)
     report_performance("Oracle Bound   ", oracle_returns)
+    
+    # Paired Permutation Test
+    def paired_permutation_test(series_a, series_b, num_permutations=5000):
+        arr_a = series_a.values
+        arr_b = series_b.values
+        if len(arr_a) != len(arr_b) or len(arr_a) == 0:
+            return 1.0
+            
+        def sharpe(arr):
+            std = np.std(arr, ddof=1)
+            return (np.mean(arr) / std) * np.sqrt(252) if std > 0 else 0.0
+            
+        base_diff = sharpe(arr_a) - sharpe(arr_b)
+        if base_diff <= 0:
+            return 1.0
+            
+        count_higher = 0
+        n = len(arr_a)
+        np.random.seed(42)
+        for _ in range(num_permutations):
+            swap = np.random.randint(0, 2, n).astype(bool)
+            perm_a = np.where(swap, arr_b, arr_a)
+            perm_b = np.where(swap, arr_a, arr_b)
+            if sharpe(perm_a) - sharpe(perm_b) >= base_diff:
+                count_higher += 1
+                
+        return count_higher / num_permutations
+        
+    p_value = paired_permutation_test(adaptive_returns, static_returns)
+    print(f"\nPaired Permutation Test (Adaptive > Static) p-value: {p_value:.4f}")
     
     # Save the real returns to disk for the visualizer
     out_dir = Path("/Users/prince/strategy_development/hypotheses/adaptive_range_scope")

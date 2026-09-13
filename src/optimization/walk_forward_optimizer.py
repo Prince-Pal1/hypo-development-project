@@ -349,6 +349,25 @@ class WalkForwardOptimizer:
         print("λ Sensitivity Grid (Full History):")
         keys = sorted(list(self.windows[0].centroid_params.keys()))
         continuous_keys = [k for k in keys if isinstance(self.windows[0].centroid_params[k], (int, float))]
+        
+        # --- NEW RUPTURES DIAGNOSTIC ---
+        import ruptures as rpt
+        print("\n[Ruptures Diagnostic] Individual Dimension Shifts (λ=2.0):")
+        for k in continuous_keys:
+            dim_signal = np.array([float(w.centroid_params.get(k, 0.0)) for w in self.windows])
+            if len(dim_signal) > 1 and np.std(dim_signal) > 0:
+                norm_dim = (dim_signal - np.mean(dim_signal)) / np.std(dim_signal)
+                algo = rpt.Pelt(model="l2", min_size=1, jump=1).fit(norm_dim.reshape(-1, 1))
+                try:
+                    bkpts = algo.predict(pen=2.0)
+                    switches = len(bkpts) - 1
+                    print(f"  Dimension '{k}': {switches} switches")
+                except Exception as e:
+                    print(f"  Dimension '{k}': Pelt failed ({e})")
+            else:
+                print(f"  Dimension '{k}': 0 switches (Constant)")
+        print()
+        
         signal_data = []
         for w in self.windows:
             signal_data.append([float(w.centroid_params.get(k, 0.0)) for k in continuous_keys])
@@ -358,13 +377,12 @@ class WalkForwardOptimizer:
             std = signal.std(axis=0)
             std[std == 0] = 1.0
             signal_norm = (signal - signal.mean(axis=0)) / std
-            import ruptures as rpt
             algo = rpt.Pelt(model="l2", min_size=1, jump=1).fit(signal_norm)
             for lam in lambdas:
                 try:
                     breakpoints = algo.predict(pen=lam)
                     n_switches = len(breakpoints) - 1
-                    print(f"  λ = {lam:5.1f} -> {n_switches} switches")
+                    print(f"  λ = {lam:5.1f} -> {n_switches} switches (All dimensions)")
                 except Exception:
                     pass
 
