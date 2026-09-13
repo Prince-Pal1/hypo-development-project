@@ -46,6 +46,9 @@ class WalkForwardOptimizer:
             dt_series = pd.to_datetime(df["timestamp"], utc=True)
         dates = sorted(list(dt_series.dt.date.unique()))
         
+        # Filter out Saturday (5) and Sunday (6) to prevent non-standard session inflation
+        dates = [d for d in dates if d.weekday() < 5]
+        
         if self.min_start_date:
             min_date = dt.datetime.strptime(self.min_start_date, "%Y-%m-%d").date()
             dates = [d for d in dates if d >= min_date]
@@ -76,8 +79,7 @@ class WalkForwardOptimizer:
         # Using annualized return and Sharpe (which gives us risk)
         if "annualized_return" in trials.columns and "sharpe_ratio" in trials.columns:
             # Reconstruct std dev (annualized) from Sharpe = (Ret - Rf) / StdDev => StdDev = Ret / Sharpe
-            # For simplicity, if Sharpe > 0:
-            std_devs = np.where(trials["sharpe_ratio"] > 0, trials["annualized_return"] / trials["sharpe_ratio"], 0.0)
+            std_devs = np.where(trials["sharpe_ratio"] != 0, np.abs(trials["annualized_return"]) / np.abs(trials["sharpe_ratio"]), 0.0)
             variances = std_devs ** 2
             trials["log_growth"] = trials["annualized_return"] - (variances / 2.0)
             score_col = "log_growth"
@@ -196,14 +198,22 @@ class WalkForwardOptimizer:
             strata = [("All", df_params)]
             
         for stratum_name, stratum_df in strata:
-            print(f"      Stratum {stratum_name} (N={len(stratum_df)}):")
+            # print(f"      Stratum {stratum_name} (N={len(stratum_df)}):")
             for col in numeric_cols:
                 if len(stratum_df[col].unique()) > 1:
                     bins = pd.cut(stratum_df[col], bins=5)
-                    counts = bins.value_counts().sort_index()
-                    print(f"        {col}: {counts.values}")
-                else:
-                    print(f"        {col}: All values = {stratum_df[col].iloc[0]}")
+                    counts = bins.value_counts().sort_index().values
+                    
+                    if len(counts) > 0 and min(counts) > 0:
+                        ratio = max(counts) / min(counts)
+                        if ratio > 3.0:
+                            print(f"      [WARNING] QMC Coverage Skewed in {col} (ratio={ratio:.1f}). Counts: {counts}")
+                    elif len(counts) > 0 and max(counts) > 0:
+                        print(f"      [WARNING] QMC Coverage has empty bins in {col}. Counts: {counts}")
+                        
+                    # print(f"        {col}: {counts}")
+                # else:
+                #    print(f"        {col}: All values = {stratum_df[col].iloc[0]}")
 
 
     def _evaluate_param_on_window(self, params: Dict[str, Any], window: WindowResult) -> float:
@@ -219,6 +229,14 @@ class WalkForwardOptimizer:
         if score_col not in window.trials.columns:
             score_col = "value" if "value" in window.trials.columns else "sharpe_ratio"
 
+        # Pre-compute Z-score stats for continuous parameters in this window
+        parsed_params = [json.loads(p) for p in window.trials["params_json"]]
+        df_params = pd.DataFrame(parsed_params)
+        
+        continuous_cols = [c for c in df_params.columns if pd.api.types.is_numeric_dtype(df_params[c]) and df_params[c].nunique() > 1]
+        means = df_params[continuous_cols].mean()
+        stds = df_params[continuous_cols].std().replace(0, 1.0)
+
         # Simple 1-NN lookup for approximation
         min_dist = float('inf')
         best_score = 0.0
@@ -229,8 +247,12 @@ class WalkForwardOptimizer:
             dist = 0.0
             for k, v in params.items():
                 if k in trial_params and isinstance(v, (int, float)):
-                    # Normalize roughly (assume unit scale for now or just raw distance)
-                    dist += (float(v) - float(trial_params[k])) ** 2
+                    if k in continuous_cols:
+                        v_norm = (float(v) - means[k]) / stds[k]
+                        t_norm = (float(trial_params[k]) - means[k]) / stds[k]
+                        dist += (v_norm - t_norm) ** 2
+                    else:
+                        dist += (float(v) - float(trial_params[k])) ** 2
             
             if dist < min_dist:
                 min_dist = dist
@@ -238,12 +260,13 @@ class WalkForwardOptimizer:
                 
         return best_score
 
-    def _solve_ruptures_switching(self, historical_windows: List[WindowResult], lambda_val: float, signal_override: Optional[np.ndarray] = None) -> Dict[str, Any]:
+    def _solve_ruptures_switching(self, historical_windows: List[WindowResult], lambda_val: float, signal_override: Optional[np.ndarray] = None) -> Tuple[Dict[str, Any], int]:
         """
         Uses ruptures.Pelt to find regime shifts based on plateau centroids or an alternative signal stream.
+        Returns a tuple of (chosen_params, regime_start_index).
         """
         if not historical_windows:
-            return {}
+            return {}, 0
             
         import ruptures as rpt
         
@@ -294,7 +317,7 @@ class WalkForwardOptimizer:
             from collections import Counter
             final_params[k] = Counter(vals).most_common(1)[0][0]
             
-        return final_params
+        return final_params, regime_start
 
     def get_alternative_signal(self, windows: List[WindowResult]) -> np.ndarray:
         import sqlite3
@@ -320,15 +343,15 @@ class WalkForwardOptimizer:
         conn.close()
         return np.array(signals)
 
-    def synthesize_policy_for_window(self, target_window_idx: int, lambda_val: float, use_leading_signals: bool = False) -> Dict[str, Any]:
+    def synthesize_policy_for_window(self, target_window_idx: int, lambda_val: float, use_leading_signals: bool = False) -> Tuple[Dict[str, Any], int]:
         """
-        Returns the parameter dict to use for `target_window_idx` by running ruptures
+        Returns the (parameter dict, regime_start_index) to use for `target_window_idx` by running ruptures
         over all windows strictly prior to `target_window_idx`.
         """
         historical_windows = [w for w in self.windows if w.window_id < target_window_idx]
         if not historical_windows:
             # First window has no history, just return a default or static baseline
-            return self.windows[0].centroid_params if self.windows else {}
+            return (self.windows[0].centroid_params if self.windows else {}), 0
             
         signal_override = self.get_alternative_signal(historical_windows) if use_leading_signals else None
         return self._solve_ruptures_switching(historical_windows, lambda_val, signal_override=signal_override)
@@ -399,7 +422,7 @@ class WalkForwardOptimizer:
                 test_window = self.windows[test_idx]
                 
                 # Pick policy using historical windows
-                chosen_params = self._solve_ruptures_switching(hist_windows, lam)
+                chosen_params, _ = self._solve_ruptures_switching(hist_windows, lam)
                 
                 # Evaluate on the test window
                 score = self._evaluate_param_on_window(chosen_params, test_window)
@@ -411,7 +434,7 @@ class WalkForwardOptimizer:
         print(f"Nested CV Lambda scores: {lambda_scores}")
         print(f"Selected λ: {best_lam}")
         
-        print("WARNING: Sample Size. With ~16-17 windows total, the sample is extremely thin.")
+        print(f"WARNING: Sample Size. With {len(self.windows)} windows total, the sample is extremely thin.")
         print("Fitting a discrete HMM or clustered policy to this will suffer high variance.")
         print("Defaulting to the CV-optimal regularized policy to minimize regime whip-sawing.")
         return best_lam

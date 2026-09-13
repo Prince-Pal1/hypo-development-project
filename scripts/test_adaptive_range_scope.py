@@ -15,7 +15,12 @@ from src.execution.range_scope_simulator import RangeScopeSimulator, RangeScopeT
 from src.execution.simulator import FeeModel
 from src.session.engine import SessionEngine
 from src.execution.ambiguity_resolver import load_1min_dataframe
-from src.research.monte_carlo import block_bootstrap_returns, compute_confidence_interval
+from src.research.monte_carlo import (
+    block_bootstrap_returns,
+    compute_confidence_interval,
+    permutation_test_regime_effect,
+    paired_bootstrap_test_regime_effect
+)
 
 DEFAULT_PARQUET_PATH = "/Users/prince/algo-trading/data/historical/XAUUSD_5m.parquet"
 
@@ -185,11 +190,13 @@ def run_walk_forward_validation():
         static_returns = pd.concat([static_returns, rets])
         
         # Adaptive
-        adaptive_params = optimizer.synthesize_policy_for_window(t_window.window_id, best_lambda)
+        adaptive_params, regime_start_idx = optimizer.synthesize_policy_for_window(t_window.window_id, best_lambda)
         print(f"Adaptive Params selected: {adaptive_params}")
         if last_adaptive_params is not None and adaptive_params != last_adaptive_params:
+            # We also track the actual regime start idx if it shifted
             switch_count += 1
             switch_dates.append(t_window.start_date)
+            print(f"   => True Regime Start Index (from history): {regime_start_idx}")
         last_adaptive_params = adaptive_params
         
         _, _, _, _, rets = evaluate_params_on_window(adaptive_params, t_window.start_date, t_window.end_date, df_5m, df_1m)
@@ -230,35 +237,28 @@ def run_walk_forward_validation():
     report_performance("Adaptive Policy", adaptive_returns)
     report_performance("Oracle Bound   ", oracle_returns)
     
+    def sharpe(arr):
+        std = np.std(arr, ddof=1)
+        return (np.mean(arr) / std) * np.sqrt(252) if std > 0 else 0.0
+
+    print("\n=== Hypothesis Testing ===")
+    
     # Paired Permutation Test
-    def paired_permutation_test(series_a, series_b, num_permutations=5000):
-        arr_a = series_a.values
-        arr_b = series_b.values
-        if len(arr_a) != len(arr_b) or len(arr_a) == 0:
-            return 1.0
-            
-        def sharpe(arr):
-            std = np.std(arr, ddof=1)
-            return (np.mean(arr) / std) * np.sqrt(252) if std > 0 else 0.0
-            
-        base_diff = sharpe(arr_a) - sharpe(arr_b)
-        if base_diff <= 0:
-            return 1.0
-            
-        count_higher = 0
-        n = len(arr_a)
-        np.random.seed(42)
-        for _ in range(num_permutations):
-            swap = np.random.randint(0, 2, n).astype(bool)
-            perm_a = np.where(swap, arr_b, arr_a)
-            perm_b = np.where(swap, arr_a, arr_b)
-            if sharpe(perm_a) - sharpe(perm_b) >= base_diff:
-                count_higher += 1
-                
-        return count_higher / num_permutations
-        
-    p_value = paired_permutation_test(adaptive_returns, static_returns)
-    print(f"\nPaired Permutation Test (Adaptive > Static) p-value: {p_value:.4f}")
+    diff_adaptive_static, p_val_ad_st = permutation_test_regime_effect(
+        adaptive_returns.values, static_returns.values, metric_func=sharpe, num_permutations=5000, seed=42
+    )
+    print(f"Permutation Test (Adaptive > Static) True Gap: {diff_adaptive_static:.3f}, p-value: {p_val_ad_st:.4f}")
+    
+    diff_oracle_static, p_val_or_st = permutation_test_regime_effect(
+        oracle_returns.values, static_returns.values, metric_func=sharpe, num_permutations=5000, seed=42
+    )
+    print(f"Permutation Test (Oracle > Static) True Gap: {diff_oracle_static:.3f}, p-value: {p_val_or_st:.4f}")
+
+    # Paired Difference Bootstrap
+    mean_diff, lower_diff, upper_diff = paired_bootstrap_test_regime_effect(
+        adaptive_returns.values, static_returns.values, metric_func=sharpe, num_paths=1000, block_size=5, seed=42
+    )
+    print(f"\nPaired Bootstrap Diff (Adaptive - Static) 95% CI: [{lower_diff:.3f}, {upper_diff:.3f}]")
     
     # Save the real returns to disk for the visualizer
     out_dir = Path("/Users/prince/strategy_development/hypotheses/adaptive_range_scope")
