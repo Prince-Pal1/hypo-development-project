@@ -1988,8 +1988,7 @@ def generate_wfo_charts(db_path: str, output_dir: str):
     
     returns_file = out_path / "oos_returns.csv"
     if returns_file.exists():
-        df_rets = pd.read_csv(returns_file, index_col=0, parse_dates=True)
-        df_rets.index = pd.to_datetime(df_rets.index)
+        df_rets = pd.read_csv(returns_file, index_col=0)
         
         # compute sharpe for labels dynamically
         def get_sharpe(rets):
@@ -2032,17 +2031,7 @@ def generate_wfo_charts(db_path: str, output_dir: str):
         
         switch_file = out_path / "switch_dates.txt"
         if switch_file.exists():
-            with open(switch_file, "r") as f:
-                switch_dates = [pd.to_datetime(l.strip()) for l in f.readlines() if l.strip()]
-            
-            # Plot marker for each switch date
-            for d in switch_dates:
-                idx = adaptive_eq.index[adaptive_eq.index >= d]
-                if len(idx) > 0:
-                    plt.scatter(idx[0], adaptive_eq.loc[idx[0]], color='red', marker='*', s=80, zorder=5)
-            
-            if switch_dates:
-                plt.scatter([], [], color='red', marker='*', s=80, label='Policy Switch')
+            pass # Skipping switch dates plot since oos_returns.csv uses integer indexes instead of datetime
         
         plt.title("Overlaid Out-of-Sample Equity Curves (Exact Real Returns)")
         plt.xlabel("Date")
