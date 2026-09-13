@@ -106,11 +106,12 @@ class WalkForwardOptimizer:
         df_params = pd.DataFrame(parsed_params)
         
         for col in df_params.columns:
-            if pd.api.types.is_numeric_dtype(df_params[col]):
-                centroid[col] = df_params[col].mean()
+            if pd.api.types.is_numeric_dtype(df_params[col]) and not pd.api.types.is_bool_dtype(df_params[col]):
+                centroid[col] = float(df_params[col].mean())
             else:
-                # For categorical, take the mode
-                centroid[col] = df_params[col].mode()[0]
+                # For categorical and boolean, take the mode
+                mode_val = df_params[col].mode()[0]
+                centroid[col] = bool(mode_val) if pd.api.types.is_bool_dtype(df_params[col]) else mode_val
                 
         centroid_score_est = plateau[score_col].mean()
         return centroid, centroid_score_est

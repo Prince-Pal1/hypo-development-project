@@ -101,9 +101,9 @@ def evaluate_params_on_window(
     
     trades_count = int(np.sum(arr != 0.0))
     if trades_count == 0:
-        return -np.inf, 0.0, max_dd, 0, pd.Series(daily_returns)
+        return -np.inf, 0.0, max_dd, 0, pd.Series(daily_returns, index=unique_dates, dtype=float)
     
-    return sharpe, ann_ret, max_dd, trades_count, pd.Series(daily_returns)
+    return sharpe, ann_ret, max_dd, trades_count, pd.Series(daily_returns, index=unique_dates, dtype=float)
 
 def run_walk_forward_validation():
     print("=== Walk-Forward Validation: Static vs Adaptive vs Oracle ===")
@@ -178,38 +178,50 @@ def run_walk_forward_validation():
     adaptive_returns = pd.Series(dtype=float)
     oracle_returns = pd.Series(dtype=float)
     
-    switch_count = 0
+    regime_switch_count = 0
+    param_change_count = 0
     last_adaptive_params = None
+    last_regime_start_idx = None
     switch_dates = []
     
-    for t_window in test_windows:
-        print(f"\n--- Testing Window {t_window.window_id} ({t_window.start_date} to {t_window.end_date}) ---")
+    for test_idx, t_window in enumerate(test_windows, start=burn_in_windows):
+        last_hist_window = optimizer.windows[t_window.window_id - 1]
+        oos_start_date = last_hist_window.end_date + dt.timedelta(days=1)
+        oos_end_date = t_window.end_date
+
+        print(f"\n--- Testing Window {t_window.window_id} True OOS ({oos_start_date} to {oos_end_date}) ---")
         
         # Static
-        _, _, _, _, rets = evaluate_params_on_window(static_params, t_window.start_date, t_window.end_date, df_5m, df_1m)
+        _, _, _, _, rets = evaluate_params_on_window(static_params, oos_start_date, oos_end_date, df_5m, df_1m)
         static_returns = pd.concat([static_returns, rets])
         
         # Adaptive
         adaptive_params, regime_start_idx = optimizer.synthesize_policy_for_window(t_window.window_id, best_lambda)
         print(f"Adaptive Params selected: {adaptive_params}")
-        if last_adaptive_params is not None and adaptive_params != last_adaptive_params:
-            # We also track the actual regime start idx if it shifted
-            switch_count += 1
-            switch_dates.append(t_window.start_date)
-            print(f"   => True Regime Start Index (from history): {regime_start_idx}")
-        last_adaptive_params = adaptive_params
         
-        _, _, _, _, rets = evaluate_params_on_window(adaptive_params, t_window.start_date, t_window.end_date, df_5m, df_1m)
+        if last_adaptive_params is not None and adaptive_params != last_adaptive_params:
+            param_change_count += 1
+            
+        if last_regime_start_idx is not None and regime_start_idx != last_regime_start_idx:
+            regime_switch_count += 1
+            switch_dates.append(oos_start_date)
+            print(f"   => True Regime Start Index shifted to: {regime_start_idx}")
+            
+        last_adaptive_params = adaptive_params
+        last_regime_start_idx = regime_start_idx
+        
+        _, _, _, _, rets = evaluate_params_on_window(adaptive_params, oos_start_date, oos_end_date, df_5m, df_1m)
         adaptive_returns = pd.concat([adaptive_returns, rets])
         
         # Oracle
         oracle_params = t_window.centroid_params
         print(f"Oracle Params (perfect hindsight): {oracle_params}")
-        _, _, _, _, rets = evaluate_params_on_window(oracle_params, t_window.start_date, t_window.end_date, df_5m, df_1m)
+        _, _, _, _, rets = evaluate_params_on_window(oracle_params, oos_start_date, oos_end_date, df_5m, df_1m)
         oracle_returns = pd.concat([oracle_returns, rets])
         
     print("\n=== Walk-Forward Out-Of-Sample Results ===")
-    print(f"Adaptive Policy Switch Count: {switch_count}")
+    print(f"Adaptive Policy Regime Switch Count: {regime_switch_count}")
+    print(f"Adaptive Policy Parameter Change Count: {param_change_count}")
     
     def report_performance(name: str, rets: pd.Series):
         if len(rets) < 3:
@@ -247,12 +259,12 @@ def run_walk_forward_validation():
     diff_adaptive_static, p_val_ad_st = permutation_test_regime_effect(
         adaptive_returns.values, static_returns.values, metric_func=sharpe, num_permutations=5000, seed=42
     )
-    print(f"Permutation Test (Adaptive > Static) True Gap: {diff_adaptive_static:.3f}, p-value: {p_val_ad_st:.4f}")
+    print(f"Permutation Test (Adaptive vs Static) Two-Sided Gap: {diff_adaptive_static:.3f}, p-value: {p_val_ad_st:.4f}")
     
     diff_oracle_static, p_val_or_st = permutation_test_regime_effect(
         oracle_returns.values, static_returns.values, metric_func=sharpe, num_permutations=5000, seed=42
     )
-    print(f"Permutation Test (Oracle > Static) True Gap: {diff_oracle_static:.3f}, p-value: {p_val_or_st:.4f}")
+    print(f"Permutation Test (Oracle vs Static) Two-Sided Gap: {diff_oracle_static:.3f}, p-value: {p_val_or_st:.4f}")
 
     # Paired Difference Bootstrap
     mean_diff, lower_diff, upper_diff = paired_bootstrap_test_regime_effect(
