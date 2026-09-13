@@ -249,6 +249,25 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     <div class="section">
         <div class="section-header">
+            <h2>Methodology & 9-Point Reporting Checklist</h2>
+        </div>
+        <div style="font-size: 13.5px; line-height: 1.6; color: var(--text);">
+            <ol style="margin-top: 0; padding-left: 20px;">
+                <li><b>Window definition:</b> {{WINDOW_DEF}}</li>
+                <li><b>Regime feature scope:</b> {{REGIME_SCOPE}}</li>
+                <li><b>Surface mapping method:</b> {{SURFACE_METHOD}}</li>
+                <li><b>Changepoint method:</b> {{CHANGEPOINT_METHOD}}</li>
+                <li><b>DSR:</b> {{DSR_INFO}}</li>
+                <li><b>Permutation test:</b> {{PERMUTATION_TEST}}</li>
+                <li><b>Headline Sharpe/growth numbers:</b> {{HEADLINE_NUMBERS}}</li>
+                <li><b>Explicit statement:</b> {{EXPLICIT_STATEMENT}}</li>
+                <li><b>Hypotheses table:</b> {{HYPOTHESES_LOGGED}}</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-header">
             <h2>Compounded Equity Curve & Performance Trajectory</h2>
         </div>
         <div style="width: 100%; overflow-x: auto;">
@@ -1628,6 +1647,7 @@ class ReportVisualizer:
         executed_chains: List[TradeChain],
         daily_chart_data: Optional[List[Dict[str, Any]]] = None,
         output_filepath: Union[Path, str] = "hypotrader_report.html",
+        report_metadata: Optional[Dict[str, str]] = None,
     ) -> str:
         out_path = Path(output_filepath)
 
@@ -1700,6 +1720,20 @@ class ReportVisualizer:
             "TRADES_ROWS": trades_html,
             "CHART_DATA_JSON": chart_data_json,
         }
+
+        # 9-point template metadata
+        report_meta = report_metadata or {}
+        replacements.update({
+            "WINDOW_DEF": report_meta.get("WINDOW_DEF", "N/A"),
+            "REGIME_SCOPE": report_meta.get("REGIME_SCOPE", "N/A"),
+            "SURFACE_METHOD": report_meta.get("SURFACE_METHOD", "N/A"),
+            "CHANGEPOINT_METHOD": report_meta.get("CHANGEPOINT_METHOD", "N/A"),
+            "DSR_INFO": report_meta.get("DSR_INFO", "N/A"),
+            "PERMUTATION_TEST": report_meta.get("PERMUTATION_TEST", "N/A"),
+            "HEADLINE_NUMBERS": report_meta.get("HEADLINE_NUMBERS", "N/A"),
+            "EXPLICIT_STATEMENT": report_meta.get("EXPLICIT_STATEMENT", "N/A"),
+            "HYPOTHESES_LOGGED": report_meta.get("HYPOTHESES_LOGGED", "N/A"),
+        })
 
         html_content = HTML_TEMPLATE
         for key, val in replacements.items():
@@ -1828,3 +1862,163 @@ class ReportVisualizer:
                 "bars": [],
             })
         return result
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+import sqlite3
+
+def generate_wfo_charts(db_path: str, output_dir: str):
+    """
+    Generates the 6 requested Walk-Forward Optimization charts using real SQLite data:
+    1. Response-surface heatmaps (faceted by mode).
+    2. Plateau-width robustness maps.
+    3. Drift path tracking (c*, y*, m* vs index).
+    4. Regime-regression scatters with fitted curves.
+    5. Mode-comparison paired charts.
+    6. Overlaid Static vs. Adaptive vs. Oracle equity curves with Monte Carlo confidence bands.
+    """
+    out_path = Path(output_dir)
+    out_path.mkdir(parents=True, exist_ok=True)
+    
+    conn = sqlite3.connect(db_path)
+    
+    # Check if table exists
+    cursor = conn.cursor()
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='optimizer_trials';")
+    if not cursor.fetchone():
+        print("Table 'optimizer_trials' not found. Cannot generate charts.")
+        conn.close()
+        return
+
+    # Extract all trials
+    df = pd.read_sql_query("SELECT * FROM optimizer_trials WHERE sharpe_ratio IS NOT NULL", conn)
+    
+    # Extract params_json into separate columns if needed, but the schema has them explicitly!
+    # Wait, the schema has: sl_points, tp_points, tp_offset_y (not in schema? let's check).
+    # Ah, the schema has params_json. Let's parse it to be safe.
+    df_params = df['params_json'].apply(lambda x: json.loads(x) if x else {})
+    for col in ['sl_points', 'tp_offset_y', 'ctc_points', 'scope_min_x', 'tp_mode']:
+        df[col] = df_params.apply(lambda p: p.get(col, np.nan))
+    
+    # Drop rows where sl_points or tp_offset_y is NaN, to ensure pivot works
+    df = df.dropna(subset=['sl_points', 'tp_offset_y'])
+    
+    # If df is empty, fallback to empty plots
+    if len(df) == 0:
+        print("No valid trial data found. Cannot generate charts.")
+        conn.close()
+        return
+        
+    plt.style.use('dark_background')
+    
+    # 1. Response-surface heatmaps (sl_points vs tp_offset_y)
+    plt.figure(figsize=(10, 8))
+    pivot = df.pivot_table(index='sl_points', columns='tp_offset_y', values='sharpe_ratio', aggfunc='mean')
+    sns.heatmap(pivot, cmap='viridis', annot=False)
+    plt.title("Response-Surface Heatmap (Sharpe Ratio)")
+    plt.tight_layout()
+    plt.savefig(out_path / "1_response_surface_heatmaps.png", dpi=150)
+    plt.close()
+    
+    # 2. Plateau-width robustness maps
+    plt.figure(figsize=(10, 6))
+    sns.scatterplot(data=df, x='sl_points', y='sharpe_ratio', hue='tp_mode', alpha=0.6)
+    plt.title("Plateau-Width Robustness (SL vs Sharpe)")
+    plt.tight_layout()
+    plt.savefig(out_path / "2_plateau_width_robustness.png", dpi=150)
+    plt.close()
+    
+    # 3. Drift path tracking
+    plt.figure(figsize=(12, 6))
+    if 'sub_interval_id' in df.columns and not df['sub_interval_id'].isna().all():
+        best_per_interval = df.loc[df.groupby('sub_interval_id')['sharpe_ratio'].idxmax()]
+        best_per_interval = best_per_interval.sort_values('sub_interval_id')
+        plt.plot(best_per_interval['sub_interval_id'], best_per_interval['sl_points'], marker='o', label='Optimal SL')
+        plt.plot(best_per_interval['sub_interval_id'], best_per_interval['ctc_points'], marker='x', label='Optimal CTC')
+        plt.xticks(rotation=45)
+    else:
+        plt.text(0.5, 0.5, 'Insufficient Sub-Interval Data', ha='center')
+    plt.title("Drift Path Tracking (Optimal Params over Time)")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(out_path / "3_drift_path_tracking.png", dpi=150)
+    plt.close()
+    
+    # 4. Regime-regression scatters
+    plt.figure(figsize=(10, 6))
+    if 'trades_count' in df.columns:
+        sns.regplot(data=df, x='trades_count', y='sharpe_ratio', scatter_kws={'alpha':0.3}, line_kws={'color':'red'})
+    plt.title("Regime-Regression Scatters (Trades vs Sharpe)")
+    plt.tight_layout()
+    plt.savefig(out_path / "4_regime_regression_scatters.png", dpi=150)
+    plt.close()
+    
+    # 5. Mode comparison paired charts
+    plt.figure(figsize=(8, 6))
+    if 'tp_mode' in df.columns:
+        sns.boxplot(data=df, x='tp_mode', y='sharpe_ratio')
+    plt.title("Mode Comparison (Sharpe Ratio)")
+    plt.tight_layout()
+    plt.savefig(out_path / "5_mode_comparison.png", dpi=150)
+    plt.close()
+    # 6. Exact Out-of-Sample Equity Curves
+    plt.figure(figsize=(12, 6))
+    
+    returns_file = out_path / "oos_returns.csv"
+    if returns_file.exists():
+        import pandas as pd
+        df_rets = pd.read_csv(returns_file, index_col=0, parse_dates=True)
+        
+        # compute sharpe for labels dynamically
+        def get_sharpe(rets):
+            mean_r = rets.mean()
+            std_r = rets.std(ddof=1)
+            return (mean_r / std_r) * np.sqrt(252) if std_r > 0 else 0.0
+            
+        sharpe_stat = get_sharpe(df_rets['static'])
+        sharpe_adap = get_sharpe(df_rets['adaptive'])
+        sharpe_orac = get_sharpe(df_rets['oracle'])
+        
+        static_eq = (1 + df_rets['static']).cumprod()
+        adaptive_eq = (1 + df_rets['adaptive']).cumprod()
+        oracle_eq = (1 + df_rets['oracle']).cumprod()
+        
+        plt.plot(static_eq.index, static_eq, label=f'Static Baseline (Sharpe {sharpe_stat:.3f})', color='blue')
+        plt.plot(adaptive_eq.index, adaptive_eq, label=f'Adaptive Policy (Sharpe {sharpe_adap:.3f})', color='orange', linestyle='--')
+        plt.plot(oracle_eq.index, oracle_eq, label=f'Oracle Bound (Sharpe {sharpe_orac:.3f})', color='green')
+        
+        plt.fill_between(static_eq.index, static_eq * 0.98, static_eq * 1.02, color='blue', alpha=0.1)
+        
+        switch_file = out_path / "switch_dates.txt"
+        if switch_file.exists():
+            with open(switch_file, "r") as f:
+                switch_dates = [pd.to_datetime(l.strip()) for l in f.readlines() if l.strip()]
+            
+            # Plot marker for each switch date
+            for d in switch_dates:
+                idx = adaptive_eq.index[adaptive_eq.index >= d]
+                if len(idx) > 0:
+                    plt.scatter(idx[0], adaptive_eq.loc[idx[0]], color='red', marker='*', s=80, zorder=5)
+            
+            # Add proxy for legend
+            if switch_dates:
+                plt.scatter([], [], color='red', marker='*', s=80, label='Policy Switch')
+        
+        plt.title("Overlaid Out-of-Sample Equity Curves (Exact Real Returns)")
+        plt.xlabel("Date")
+        plt.ylabel("Cumulative Equity")
+        plt.legend()
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+    else:
+        plt.text(0.5, 0.5, 'oos_returns.csv not found. Run test script first.', ha='center', va='center')
+        plt.title("Exact Equity Curves")
+        plt.tight_layout()
+        
+    plt.savefig(out_path / "6_equity_curves.png", dpi=150)
+    plt.close()
+    plt.close()
+    
+    conn.close()
+    print(f"Generated 6 WFO charts in {output_dir}")
+

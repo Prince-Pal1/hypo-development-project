@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WFO Reports | HypoTrader</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        :root {
+            --bg: #0e1117;
+            --surface: #161b22;
+            --surface-elevated: #1f242c;
+            --border: #30363d;
+            --border-light: #484f58;
+            --text: #f0f6fc;
+            --text-muted: #8b949e;
+            --accent: #58a6ff;
+        }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            padding: 24px;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .btn-report {
+            background: var(--surface);
+            color: var(--accent);
+            border: 1px solid var(--accent);
+            padding: 7px 14px;
+            border-radius: var(--radius);
+            font-size: 12.5px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+        .btn-report:hover {
+            background: var(--accent-glow);
+        }
+        .btn-report.active {
+            background: var(--accent);
+            color: var(--bg);
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 32px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .report-content {
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 32px;
+        }
+        .report-content h1 { font-size: 28px; margin-bottom: 16px; margin-top: 24px; }
+        .report-content h2 { font-size: 22px; margin-bottom: 12px; margin-top: 32px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+        .report-content h3 { font-size: 18px; margin-bottom: 10px; margin-top: 24px; }
+        .report-content p { margin-bottom: 16px; color: #c9d1d9; }
+        .report-content ul, .report-content ol { margin-bottom: 16px; padding-left: 24px; color: #c9d1d9; }
+        .report-content li { margin-bottom: 8px; }
+        .report-content strong { color: var(--text); font-weight: 600; }
+        .report-content code {
+            font-family: 'JetBrains Mono', monospace;
+            background-color: rgba(110, 118, 129, 0.4);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 32px;
+        }
+        .chart-card {
+            background-color: var(--surface-elevated);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .chart-card img {
+            width: 100%;
+            height: auto;
+            border-bottom: 1px solid var(--border);
+        }
+        .chart-card .title {
+            padding: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            text-align: center;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>HypoTrader Strategy Studio</h1>
+            <div class="header-actions">
+                <a href="/" class="btn-report">← Main App</a>
+                <a href="/observatory" class="btn-report">🔭 Data Observatory</a>
+                <a href="/reports" class="btn-report active">WFO Reports</a>
+            </div>
+        </header>
+
+        <main>
+            <div id="report-container" class="report-content">
+                Loading report...
+            </div>
+            
+            <h2 style="margin-top: 40px; font-size: 22px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">Generated Charts</h2>
+            <div class="gallery">
+                <div class="chart-card">
+                    <img src="/hypotheses/adaptive_range_scope/1_response_surface_heatmaps.png" alt="Heatmaps" onerror="this.parentElement.style.display='none'">
+                    <div class="title">1. Response Surface Heatmaps</div>
+                </div>
+                <div class="chart-card">
+                    <img src="/hypotheses/adaptive_range_scope/2_plateau_width_robustness.png" alt="Plateau Robustness" onerror="this.parentElement.style.display='none'">
+                    <div class="title">2. Plateau Width Robustness</div>
+                </div>
+                <div class="chart-card">
+                    <img src="/hypotheses/adaptive_range_scope/3_drift_path_tracking.png" alt="Drift Path" onerror="this.parentElement.style.display='none'">
+                    <div class="title">3. Drift Path Tracking</div>
+                </div>
+                <div class="chart-card">
+                    <img src="/hypotheses/adaptive_range_scope/4_regime_regression_scatters.png" alt="Regime Regression" onerror="this.parentElement.style.display='none'">
+                    <div class="title">4. Regime Regression Scatters</div>
+                </div>
+                <div class="chart-card">
+                    <img src="/hypotheses/adaptive_range_scope/5_mode_comparison.png" alt="Mode Comparison" onerror="this.parentElement.style.display='none'">
+                    <div class="title">5. Mode Comparison</div>
+                </div>
+                <div class="chart-card">
+                    <img src="/hypotheses/adaptive_range_scope/6_equity_curves.png" alt="Equity Curves" onerror="this.parentElement.style.display='none'">
+                    <div class="title">6. Equity Curves (OOS)</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            fetch("/api/report_data")
+                .then(res => res.json())
+                .then(data => {
+                    if(data.markdown) {
+                        document.getElementById("report-container").innerHTML = marked.parse(data.markdown);
+                    } else {
+                        document.getElementById("report-container").innerHTML = "<p>No report found.</p>";
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    document.getElementById("report-container").innerHTML = "<p style='color: var(--red);'>Failed to load report data.</p>";
+                });
+        });
+    </script>
+</body>
+</html>

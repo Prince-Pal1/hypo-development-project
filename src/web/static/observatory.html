@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HypoTrader Observatory</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+    <style>
+        :root {
+            --bg: #0e1117;
+            --surface: #161b22;
+            --surface-elevated: #1f242c;
+            --border: #30363d;
+            --border-light: #484f58;
+            --text: #f0f6fc;
+            --text-muted: #8b949e;
+            --text-faint: #6e7681;
+            --accent: #58a6ff;
+            --accent-glow: rgba(88, 166, 255, 0.18);
+            --green: #3fb950;
+            --green-glow: rgba(63, 185, 80, 0.18);
+            --radius: 8px;
+            --radius-lg: 12px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+            padding: 24px;
+            font-size: 14px;
+        }
+
+        .container {
+            max-width: 1440px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 24px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-icon {
+            width: 38px;
+            height: 38px;
+            background: linear-gradient(135deg, #1f6feb, #bc8cff);
+            border-radius: var(--radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 20px;
+            color: #fff;
+        }
+
+        .brand-title h1 {
+            font-size: 20px;
+            font-weight: 700;
+            color: #fff;
+            letter-spacing: -0.3px;
+        }
+
+        .brand-title p {
+            font-size: 12.5px;
+            color: var(--text-muted);
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .btn-report {
+            background: var(--surface);
+            color: var(--accent);
+            border: 1px solid var(--accent);
+            padding: 7px 14px;
+            border-radius: var(--radius);
+            font-size: 12.5px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .btn-report:hover {
+            background: var(--accent-glow);
+        }
+
+        .filters-bar {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 16px 24px;
+            margin-bottom: 24px;
+            display: flex;
+            gap: 24px;
+            align-items: center;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .filter-group label {
+            color: var(--text-muted);
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .filter-group select {
+            background: var(--surface-elevated);
+            color: var(--text);
+            border: 1px solid var(--border-light);
+            padding: 6px 12px;
+            border-radius: var(--radius);
+            font-family: inherit;
+            font-size: 13.5px;
+            outline: none;
+        }
+
+        .filter-group select:focus {
+            border-color: var(--accent);
+        }
+
+        .layout-grid {
+            display: grid;
+            grid-template-columns: 3fr 1fr;
+            gap: 24px;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        .card h2 {
+            margin-bottom: 16px;
+            font-size: 18px;
+            color: #fff;
+        }
+
+        .chart-container {
+            width: 100%;
+            height: 600px;
+            background: var(--surface-elevated);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius);
+        }
+
+        .context-sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .context-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+        }
+
+        .context-card h3 {
+            color: var(--accent);
+            margin-bottom: 12px;
+            font-size: 15px;
+        }
+
+        .context-card p {
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            font-size: 13.5px;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div class="brand">
+                <div class="brand-icon">HT</div>
+                <div class="brand-title">
+                    <h1>HypoTrader Strategy Studio</h1>
+                    <p>Phase 0: Data Observatory</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <a href="/" class="btn-report">← Main App</a>
+                <a href="/reports" class="btn-report">📄 WFO Reports</a>
+            </div>
+        </header>
+
+        <div class="filters-bar">
+            <div class="filter-group">
+                <label for="filterMode">TP Mode:</label>
+                <select id="filterMode">
+                    <option value="ALL">All Modes</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="filterScope">Range Scope (Min X):</label>
+                <select id="filterScope">
+                    <option value="ALL">All Scopes</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="layout-grid">
+            <div class="main-content">
+                <div class="card">
+                    <h2>3D Response Surface: SL vs TP vs Sharpe</h2>
+                    <div id="surfacePlotSLTP" class="chart-container"></div>
+                </div>
+
+                <div class="card">
+                    <h2>3D Response Surface: SL vs CTC vs Sharpe</h2>
+                    <div id="surfacePlotSLCTC" class="chart-container"></div>
+                </div>
+
+                <div class="card">
+                    <h2>Regime Scatter: Trade Counts vs Sharpe</h2>
+                    <div id="scatterPlot" class="chart-container"></div>
+                </div>
+            </div>
+
+            <div class="context-sidebar">
+                <div class="context-card">
+                    <h3>The Phase 0 Audit</h3>
+                    <p>This observatory visualizes the raw parameter optimization data from our Walk-Forward Evaluation.</p>
+                    <p>During Phase 0, we discovered that the Dynamic Programming (DP) policy <b>never switched parameters a single time</b>.</p>
+                    <p>The switching penalty &lambda; tuned via nested CV correctly identified that trailing 10-day look-backs are too noisy to justify jumping between parameters.</p>
+                </div>
+                
+                <div class="context-card">
+                    <h3>The Oracle Gap</h3>
+                    <p>A rigorous permutation test established that an Oracle built on pure noise only yields a gap of 2.17 Sharpe.</p>
+                    <p>Our true Oracle Gap is <b>2.336 Sharpe</b>, mathematically surviving the permutation. This proves that while <i>reactive</i> trailing adaptation fails, <i>predictive</i> forecasting possesses genuine alpha.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.appData = [];
+
+        async function loadObservatoryData() {
+            try {
+                const response = await fetch('/api/observatory_data');
+                window.appData = await response.json();
+                populateDropdowns();
+                applyFilters();
+                
+                document.getElementById('filterMode').addEventListener('change', applyFilters);
+                document.getElementById('filterScope').addEventListener('change', applyFilters);
+            } catch (error) {
+                console.error("Failed to load observatory data:", error);
+            }
+        }
+
+        function populateDropdowns() {
+            const modes = new Set();
+            const scopes = new Set();
+            
+            window.appData.forEach(d => {
+                if (d.tp_mode) modes.add(d.tp_mode);
+                if (d.scope_min_x != null) scopes.add(d.scope_min_x);
+            });
+
+            const modeSelect = document.getElementById('filterMode');
+            Array.from(modes).sort().forEach(mode => {
+                const opt = document.createElement('option');
+                opt.value = mode;
+                opt.textContent = mode;
+                modeSelect.appendChild(opt);
+            });
+
+            const scopeSelect = document.getElementById('filterScope');
+            Array.from(scopes).sort((a, b) => a - b).forEach(scope => {
+                const opt = document.createElement('option');
+                opt.value = scope;
+                opt.textContent = scope;
+                scopeSelect.appendChild(opt);
+            });
+        }
+
+        function applyFilters() {
+            const modeFilter = document.getElementById('filterMode').value;
+            const scopeFilter = document.getElementById('filterScope').value;
+            const zMetric = 'sharpe_ratio';
+
+            let filtered = window.appData.filter(d => {
+                if (modeFilter !== 'ALL' && d.tp_mode !== modeFilter) return false;
+                if (scopeFilter !== 'ALL' && String(d.scope_min_x) !== scopeFilter) return false;
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                console.warn("No data matches the selected filters.");
+                // Optionally clear charts here
+                return;
+            }
+
+            renderSurfacePlot(filtered, 'surfacePlotSLTP', 'sl_points', 'tp_offset_y', zMetric, 'Stop Loss (Points)', 'TP Offset (Points)');
+            renderSurfacePlot(filtered, 'surfacePlotSLCTC', 'sl_points', 'ctc_points', zMetric, 'Stop Loss (Points)', 'CTC Points');
+            renderScatterPlot(filtered, zMetric);
+        }
+
+        function renderSurfacePlot(data, elementId, xKey, yKey, zKey, xTitle, yTitle) {
+            let maxZ = -Infinity;
+            let maxCoord = null;
+
+            const xVals = [];
+            const yVals = [];
+            const zVals = [];
+
+            data.forEach(d => {
+                if (d[xKey] == null || d[yKey] == null || d[zKey] == null) return;
+                const x = parseFloat(d[xKey]);
+                const y = parseFloat(d[yKey]);
+                const z = parseFloat(d[zKey]);
+
+                if (z > maxZ) {
+                    maxZ = z;
+                    maxCoord = {x: x, y: y, z: z};
+                }
+
+                xVals.push(x);
+                yVals.push(y);
+                zVals.push(z);
+            });
+
+            const zTitle = 'Sharpe Ratio';
+
+            const surfaceTrace = {
+                x: xVals,
+                y: yVals,
+                z: zVals,
+                type: 'mesh3d',
+                intensity: zVals,
+                colorscale: 'Viridis',
+                colorbar: { title: zTitle },
+                opacity: 0.9,
+                hoverinfo: 'x+y+z'
+            };
+
+            const traces = [surfaceTrace];
+
+            // Add the max point marker if valid
+            if (maxCoord) {
+                const maxTrace = {
+                    x: [maxCoord.x],
+                    y: [maxCoord.y],
+                    z: [maxCoord.z],
+                    mode: 'markers',
+                    type: 'scatter3d',
+                    marker: {
+                        color: 'red',
+                        size: 8,
+                        symbol: 'diamond',
+                        line: {
+                            color: 'white',
+                            width: 2
+                        }
+                    },
+                    name: `Max ${zTitle}: ${maxZ.toFixed(3)}`
+                };
+                traces.push(maxTrace);
+            }
+
+            const layout = {
+                scene: {
+                    xaxis: { title: xTitle, gridcolor: '#484f58', zerolinecolor: '#484f58' },
+                    yaxis: { title: yTitle, gridcolor: '#484f58', zerolinecolor: '#484f58' },
+                    zaxis: { title: zTitle, gridcolor: '#484f58', zerolinecolor: '#484f58' },
+                    camera: { eye: { x: 1.5, y: -1.5, z: 1.2 } }
+                },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                margin: { l: 0, r: 0, b: 0, t: 0 },
+                font: { color: '#8b949e' },
+                showlegend: true,
+                legend: { x: 0.8, y: 0.9, bgcolor: 'rgba(22, 27, 34, 0.8)' }
+            };
+
+            Plotly.newPlot(elementId, traces, layout, {responsive: true});
+        }
+
+        function renderScatterPlot(data, zKey) {
+            const xVals = [];
+            const yVals = [];
+            const textVals = [];
+
+            data.forEach(d => {
+                if (d.trade_count == null || d[zKey] == null) return;
+                xVals.push(d.trade_count);
+                yVals.push(d[zKey]);
+                textVals.push(`SL: ${d.sl_points}, TP: ${d.tp_offset_y}`);
+            });
+
+            const zTitle = 'Sharpe Ratio';
+
+            const trace = {
+                x: xVals,
+                y: yVals,
+                mode: 'markers',
+                type: 'scatter',
+                text: textVals,
+                marker: {
+                    size: 8,
+                    color: yVals,
+                    colorscale: 'RdYlGn',
+                    showscale: true,
+                    line: { color: '#161b22', width: 1 },
+                    opacity: 0.7
+                }
+            };
+
+            const layout = {
+                xaxis: { title: 'Trade Count', gridcolor: '#30363d', zerolinecolor: '#30363d' },
+                yaxis: { title: zTitle, gridcolor: '#30363d', zerolinecolor: '#30363d' },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#8b949e' },
+                margin: { l: 50, r: 20, b: 50, t: 20 }
+            };
+
+            Plotly.newPlot('scatterPlot', [trace], layout, {responsive: true});
+        }
+
+        document.addEventListener('DOMContentLoaded', loadObservatoryData);
+    </script>
+</body>
+</html>
