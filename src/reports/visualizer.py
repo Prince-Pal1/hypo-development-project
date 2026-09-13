@@ -1989,6 +1989,7 @@ def generate_wfo_charts(db_path: str, output_dir: str):
     returns_file = out_path / "oos_returns.csv"
     if returns_file.exists():
         df_rets = pd.read_csv(returns_file, index_col=0)
+        df_rets = df_rets.reset_index(drop=True)
         
         # compute sharpe for labels dynamically
         def get_sharpe(rets):
