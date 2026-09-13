@@ -31,6 +31,7 @@ class MarketConditionRecord:
     proximity_bias: str
     distance_to_extreme: float
     is_within_offset: bool
+    is_event_day: bool
     
     # New regime features
     parkinson_volatility: Optional[float] = None
@@ -42,6 +43,11 @@ class MarketConditionRecord:
     lag_3_autocorr: Optional[float] = None
     lag_4_autocorr: Optional[float] = None
     lag_5_autocorr: Optional[float] = None
+    
+    # New 11:00-12:30 IST regime specific properties
+    regime_range_high: Optional[float] = None
+    regime_range_low: Optional[float] = None
+    regime_close: Optional[float] = None
 
 
 class ConditionGenerator:
@@ -83,13 +89,17 @@ class ConditionGenerator:
             cursor = conn.execute("PRAGMA table_info(market_conditions)")
             cols = [col["name"] for col in cursor.fetchall()]
             new_cols = [
+                "is_event_day", "regime_range_high", "regime_range_low", "regime_close",
                 "parkinson_volatility", "hurst_exponent", "adx", 
                 "vol_of_vol", "lag_1_autocorr", "lag_2_autocorr", 
                 "lag_3_autocorr", "lag_4_autocorr", "lag_5_autocorr"
             ]
             for col in new_cols:
                 if col not in cols:
-                    conn.execute(f"ALTER TABLE market_conditions ADD COLUMN {col} REAL")
+                    if col == "is_event_day":
+                        conn.execute(f"ALTER TABLE market_conditions ADD COLUMN {col} BOOLEAN")
+                    else:
+                        conn.execute(f"ALTER TABLE market_conditions ADD COLUMN {col} REAL")
 
     def generate_conditions_from_parquet(
         self,
@@ -114,12 +124,23 @@ class ConditionGenerator:
         start = start_date or min_dt
         end = end_date or max_dt
 
+        # Hardcoded 2026 FOMC and NFP logic for backtesting
+        fomc_2026 = {
+            dt.date(2026, 1, 28), dt.date(2026, 3, 18), dt.date(2026, 4, 29),
+            dt.date(2026, 6, 17), dt.date(2026, 7, 29), dt.date(2026, 9, 16),
+            dt.date(2026, 11, 4), dt.date(2026, 12, 16)
+        }
+        
+        def is_nfp(d: dt.date) -> bool:
+            return d.weekday() == 4 and d.day <= 7
+
         # Find distinct trading dates (excluding weekends)
         dates_range = pd.date_range(start, end, freq="B").date
 
         records: List[MarketConditionRecord] = []
 
         for target_date in dates_range:
+            is_event = (target_date in fomc_2026) or is_nfp(target_date)
             window: SessionWindow = self.session_engine.get_session_window(target_date)
 
             # Slice session bars
@@ -146,6 +167,20 @@ class ConditionGenerator:
                 dist_extreme = dist_high
 
             is_within = dist_extreme <= x_offset
+            
+            # Slice 11:00-12:30 IST window (05:30-07:00 UTC) for regime calculations
+            regime_start_utc = pd.Timestamp(dt.datetime.combine(target_date, dt.time(5, 30))).tz_localize("UTC")
+            regime_end_utc = pd.Timestamp(dt.datetime.combine(target_date, dt.time(7, 0))).tz_localize("UTC")
+            regime_mask = (df["utc_time"] >= regime_start_utc) & (df["utc_time"] <= regime_end_utc)
+            regime_bars = df.loc[regime_mask]
+            
+            regime_high = None
+            regime_low = None
+            regime_close = None
+            if not is_event and len(regime_bars) > 0:
+                regime_high = float(regime_bars["high"].max())
+                regime_low = float(regime_bars["low"].min())
+                regime_close = float(regime_bars.iloc[-1]["close"])
 
             rec = MarketConditionRecord(
                 date=target_date.isoformat(),
@@ -161,6 +196,10 @@ class ConditionGenerator:
                 proximity_bias=bias,
                 distance_to_extreme=dist_extreme,
                 is_within_offset=is_within,
+                is_event_day=is_event,
+                regime_range_high=regime_high,
+                regime_range_low=regime_low,
+                regime_close=regime_close
             )
             records.append(rec)
 
@@ -169,32 +208,33 @@ class ConditionGenerator:
         # Feature Engineering: compute rolling metrics (Phase 1)
         if not res_df.empty:
             # 1. Parkinson Volatility: sqrt( 1/(4 ln 2) * (ln(H/L))^2 )
-            res_df["parkinson_volatility"] = np.sqrt(1.0 / (4.0 * np.log(2.0))) * np.log(res_df["range_high"] / res_df["range_low"])
+            res_df["parkinson_volatility"] = np.sqrt(1.0 / (4.0 * np.log(2.0))) * np.log(pd.to_numeric(res_df["regime_range_high"]) / pd.to_numeric(res_df["regime_range_low"]))
             
             # 2. Vol-of-vol: 10-day rolling std of Parkinson volatility
             res_df["vol_of_vol"] = res_df["parkinson_volatility"].rolling(window=10, min_periods=5).std()
             
-            # 3. Autocorrelation: Lag 1 to 5 of daily returns (using eval_price)
-            daily_returns = res_df["eval_price"].pct_change()
+            # 3. Autocorrelation: Lag 1 to 5 of daily returns (using regime_close)
+            daily_returns = pd.to_numeric(res_df["regime_close"]).pct_change()
             for lag in range(1, 6):
                 # Use a rolling correlation to capture dynamic autocorrelation
                 res_df[f"lag_{lag}_autocorr"] = daily_returns.rolling(window=10, min_periods=5).apply(
-                    lambda x: pd.Series(x).autocorr(lag=lag) if len(x) > lag else np.nan
+                    lambda x: pd.Series(x).autocorr(lag=lag) if len(x.dropna()) > lag else np.nan
                 )
             
             # 4. Hurst Exponent (rolling 10-day window)
             try:
                 from hurst import compute_Hc
                 def calc_hurst(x):
-                    # hurst requires > 10 points typically, but we'll try on short windows, fallback to 0.5
-                    # 'simplified' works for shorter series
+                    x_clean = x.dropna()
+                    if len(x_clean) < 10:
+                        return np.nan
                     try:
-                        H, c, data = compute_Hc(x, kind='price', simplified=True)
+                        H, c, data = compute_Hc(x_clean, kind='price', simplified=True)
                         return H
                     except Exception:
                         return 0.5 # Random walk assumption fallback
                 
-                res_df["hurst_exponent"] = res_df["eval_price"].rolling(window=10, min_periods=10).apply(calc_hurst)
+                res_df["hurst_exponent"] = pd.to_numeric(res_df["regime_close"]).rolling(window=10, min_periods=10).apply(calc_hurst)
             except ImportError:
                 res_df["hurst_exponent"] = np.nan
                 
@@ -202,31 +242,34 @@ class ConditionGenerator:
             # Wilder's Smoothing
             def wilder_smooth(s, n=14):
                 res = np.zeros_like(s.values)
-                res[0] = s.dropna().values[0] if len(s.dropna()) > 0 else 0
+                s_clean = s.dropna()
+                res[0] = s_clean.values[0] if len(s_clean) > 0 else 0
                 for i in range(1, len(s)):
                     if np.isnan(res[i-1]):
                         res[i] = s.values[i]
+                    elif np.isnan(s.values[i]):
+                        res[i] = res[i-1]
                     else:
                         res[i] = (res[i-1] * (n - 1) + s.values[i]) / n
                 return pd.Series(res, index=s.index)
 
-            # True Range
-            prev_close = res_df["eval_price"].shift(1)
-            tr1 = res_df["range_high"] - res_df["range_low"]
-            tr2 = (res_df["range_high"] - prev_close).abs()
-            tr3 = (res_df["range_low"] - prev_close).abs()
+            # True Range based on regime window
+            prev_close = pd.to_numeric(res_df["regime_close"]).shift(1)
+            tr1 = pd.to_numeric(res_df["regime_range_high"]) - pd.to_numeric(res_df["regime_range_low"])
+            tr2 = (pd.to_numeric(res_df["regime_range_high"]) - prev_close).abs()
+            tr3 = (pd.to_numeric(res_df["regime_range_low"]) - prev_close).abs()
             tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
 
             # Directional Movement
-            up_move = res_df["range_high"] - res_df["range_high"].shift(1)
-            down_move = res_df["range_low"].shift(1) - res_df["range_low"]
+            up_move = pd.to_numeric(res_df["regime_range_high"]) - pd.to_numeric(res_df["regime_range_high"]).shift(1)
+            down_move = pd.to_numeric(res_df["regime_range_low"]).shift(1) - pd.to_numeric(res_df["regime_range_low"])
             
             plus_dm = np.where((up_move > down_move) & (up_move > 0), up_move, 0.0)
             minus_dm = np.where((down_move > up_move) & (down_move > 0), down_move, 0.0)
 
             atr = wilder_smooth(tr, 14)
-            plus_di = 100 * (wilder_smooth(pd.Series(plus_dm), 14) / atr)
-            minus_di = 100 * (wilder_smooth(pd.Series(minus_dm), 14) / atr)
+            plus_di = 100 * (wilder_smooth(pd.Series(plus_dm, index=tr.index), 14) / atr)
+            minus_di = 100 * (wilder_smooth(pd.Series(minus_dm, index=tr.index), 14) / atr)
             
             dx = 100 * (abs(plus_di - minus_di) / (plus_di + minus_di).replace(0, 1))
             res_df["adx"] = wilder_smooth(dx, 14)
@@ -243,14 +286,16 @@ class ConditionGenerator:
                     date, sydney_open_utc, eval_time_utc, range_high, range_low,
                     range_width_pts, midpoint, eval_price, distance_to_high,
                     distance_to_low, proximity_bias, distance_to_extreme, is_within_offset,
+                    is_event_day, regime_range_high, regime_range_low, regime_close,
                     parkinson_volatility, hurst_exponent, adx, vol_of_vol,
                     lag_1_autocorr, lag_2_autocorr, lag_3_autocorr, lag_4_autocorr, lag_5_autocorr
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, [
                 (
                     r.date, r.sydney_open_utc, r.eval_time_utc, r.range_high, r.range_low,
                     r.range_width_pts, r.midpoint, r.eval_price, r.distance_to_high,
                     r.distance_to_low, r.proximity_bias, r.distance_to_extreme, r.is_within_offset,
+                    r.is_event_day, r.regime_range_high, r.regime_range_low, r.regime_close,
                     r.parkinson_volatility, r.hurst_exponent, r.adx, r.vol_of_vol,
                     r.lag_1_autocorr, r.lag_2_autocorr, r.lag_3_autocorr, r.lag_4_autocorr, r.lag_5_autocorr
                 ) for r in records

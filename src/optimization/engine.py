@@ -96,7 +96,7 @@ class OptunaStudyEngine:
         study = optuna.create_study(
             study_name=self.study_name,
             direction="maximize",
-            sampler=optuna.samplers.TPESampler(seed=42),
+            sampler=optuna.samplers.QMCSampler(qmc_type="sobol", seed=42),
         )
 
         study.optimize(self.objective, n_trials=n_trials)

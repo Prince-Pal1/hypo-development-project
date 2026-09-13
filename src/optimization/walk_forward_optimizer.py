@@ -84,6 +84,9 @@ class WalkForwardOptimizer:
         else:
             score_col = "value" if "value" in trials.columns else "sharpe_ratio"
 
+        if len(trials) > 1 and trials[score_col].var() < 1e-6:
+            raise ValueError(f"Score variance across all trials is near zero for metric '{score_col}'. The scoring function is likely broken or returning identical dummy values.")
+
         # 90th percentile plateau
         p90_threshold = trials[score_col].quantile(0.90)
         plateau = trials[trials[score_col] >= p90_threshold].copy()
@@ -115,7 +118,17 @@ class WalkForwardOptimizer:
         trading_days = self._get_trading_days()
         window_bounds = self._build_windows(trading_days)
         print(f"Total isolated training windows to evaluate: {len(window_bounds)}")
-        
+        if len(window_bounds) > 0:
+            print("First 5 windows:")
+            for idx, (w_start, w_end) in enumerate(window_bounds[:5]):
+                print(f"  Window {idx}: {w_start} to {w_end}")
+            
+            if len(window_bounds) > 5:
+                print("Last 5 windows:")
+                start_idx = max(5, len(window_bounds) - 5)
+                for idx, (w_start, w_end) in enumerate(window_bounds[start_idx:], start=start_idx):
+                    print(f"  Window {idx}: {w_start} to {w_end}")
+
         import sqlite3
         
         for idx, (w_start, w_end) in enumerate(window_bounds):
@@ -149,6 +162,9 @@ class WalkForwardOptimizer:
                 
             centroid_params, centroid_score = self._extract_plateau_centroid(trials_df)
             
+            # Phase B: QMC Coverage Check
+            self._verify_qmc_coverage(trials_df)
+            
             self.windows.append(WindowResult(
                 window_id=idx,
                 start_date=w_start,
@@ -157,6 +173,38 @@ class WalkForwardOptimizer:
                 centroid_params=centroid_params,
                 centroid_score=centroid_score,
             ))
+
+    def _verify_qmc_coverage(self, trials: pd.DataFrame) -> None:
+        """
+        Splits each continuous parameter's range into 5 equal bins and reports the count.
+        This verifies QMC sampling uniformity across strata.
+        """
+        if len(trials) == 0:
+            return
+            
+        print("    [QMC Coverage Check]")
+        parsed_params = [json.loads(p) for p in trials["params_json"]]
+        df_params = pd.DataFrame(parsed_params)
+        
+        # Identify discrete combinations (strata)
+        categorical_cols = [c for c in df_params.columns if not pd.api.types.is_numeric_dtype(df_params[c])]
+        numeric_cols = [c for c in df_params.columns if pd.api.types.is_numeric_dtype(df_params[c])]
+        
+        if categorical_cols:
+            strata = df_params.groupby(categorical_cols)
+        else:
+            strata = [("All", df_params)]
+            
+        for stratum_name, stratum_df in strata:
+            print(f"      Stratum {stratum_name} (N={len(stratum_df)}):")
+            for col in numeric_cols:
+                if len(stratum_df[col].unique()) > 1:
+                    bins = pd.cut(stratum_df[col], bins=5)
+                    counts = bins.value_counts().sort_index()
+                    print(f"        {col}: {counts.values}")
+                else:
+                    print(f"        {col}: All values = {stratum_df[col].iloc[0]}")
+
 
     def _evaluate_param_on_window(self, params: Dict[str, Any], window: WindowResult) -> float:
         """
@@ -190,53 +238,91 @@ class WalkForwardOptimizer:
                 
         return best_score
 
-    def _solve_dp_switching(self, historical_windows: List[WindowResult], lambda_val: float) -> Dict[str, Any]:
+    def _solve_ruptures_switching(self, historical_windows: List[WindowResult], lambda_val: float, signal_override: Optional[np.ndarray] = None) -> Dict[str, Any]:
         """
-        Solves DP: maximize sum_k R_k(θ_k) - λ * sum_k 1[θ_k != θ_{k-1}]
-        Uses the plateau centroids of all historical windows as the discrete state space for θ_k.
-        Returns the optimal parameter state for the FINAL historical window.
+        Uses ruptures.Pelt to find regime shifts based on plateau centroids or an alternative signal stream.
         """
         if not historical_windows:
             return {}
             
-        N = len(historical_windows)
-        candidate_params = [w.centroid_params for w in historical_windows]
+        import ruptures as rpt
         
-        # dp[k][i] = max cumulative score up to window k ending in parameter state i
-        dp = np.zeros((N, len(candidate_params)))
-        backpointer = np.zeros((N, len(candidate_params)), dtype=int)
+        # 1. Build signal matrix
+        keys = sorted(list(historical_windows[0].centroid_params.keys()))
+        continuous_keys = [k for k in keys if isinstance(historical_windows[0].centroid_params[k], (int, float))]
+        categorical_keys = [k for k in keys if not isinstance(historical_windows[0].centroid_params[k], (int, float))]
         
-        # Base case for k=0
-        for i, param_state in enumerate(candidate_params):
-            dp[0][i] = self._evaluate_param_on_window(param_state, historical_windows[0])
+        if signal_override is not None:
+            signal = signal_override
+        else:
+            signal_data = []
+            for w in historical_windows:
+                row = []
+                for k in continuous_keys:
+                    row.append(float(w.centroid_params.get(k, 0.0)))
+                signal_data.append(row)
+            signal = np.array(signal_data)
+        
+        if signal.shape[1] > 0 and len(signal) > 1:
+            # Normalize signal for L2 cost
+            std = signal.std(axis=0)
+            std[std == 0] = 1.0
+            signal_norm = (signal - signal.mean(axis=0)) / std
             
-        # DP transitions
-        for k in range(1, N):
-            for i, param_state in enumerate(candidate_params):
-                reward = self._evaluate_param_on_window(param_state, historical_windows[k])
-                
-                best_prev_score = -float('inf')
-                best_prev_idx = -1
-                
-                for j, prev_state in enumerate(candidate_params):
-                    # Switching cost penalty
-                    penalty = lambda_val if i != j else 0.0
-                    score = dp[k-1][j] + reward - penalty
-                    
-                    if score > best_prev_score:
-                        best_prev_score = score
-                        best_prev_idx = j
-                        
-                dp[k][i] = best_prev_score
-                backpointer[k][i] = best_prev_idx
-                
-        # The optimal state at the end of the training period
-        best_final_idx = np.argmax(dp[N-1])
-        return candidate_params[best_final_idx]
+            # 2. Find changepoints
+            try:
+                algo = rpt.Pelt(model="l2", min_size=1, jump=1).fit(signal_norm)
+                breakpoints = algo.predict(pen=lambda_val)
+                # Breakpoints are indices. The last segment starts at the previous breakpoint.
+                regime_start = breakpoints[-2] if len(breakpoints) > 1 else 0
+            except Exception as e:
+                print(f"Ruptures Pelt failed: {e}. Fallback to static.")
+                regime_start = 0
+        else:
+            regime_start = 0
+            
+        current_regime_windows = historical_windows[regime_start:]
+        
+        # 3. Compute centroid of the current regime
+        final_params = {}
+        for k in continuous_keys:
+            vals = [w.centroid_params.get(k) for w in current_regime_windows]
+            final_params[k] = float(np.mean(vals))
+            
+        for k in categorical_keys:
+            vals = [w.centroid_params.get(k) for w in current_regime_windows]
+            from collections import Counter
+            final_params[k] = Counter(vals).most_common(1)[0][0]
+            
+        return final_params
 
-    def synthesize_policy_for_window(self, target_window_idx: int, lambda_val: float) -> Dict[str, Any]:
+    def get_alternative_signal(self, windows: List[WindowResult]) -> np.ndarray:
+        import sqlite3
+        import os
+        db_path = "hypotrader.db"
+        if not os.path.exists(db_path):
+            return None
+        conn = sqlite3.connect(db_path)
+        signals = []
+        for w in windows:
+            df = pd.read_sql_query(
+                "SELECT parkinson_volatility, adx FROM market_conditions WHERE date >= ? AND date <= ?",
+                conn, params=(w.start_date.isoformat(), w.end_date.isoformat())
+            )
+            if len(df) > 0:
+                vol = float(df["parkinson_volatility"].mean(skipna=True))
+                adx = float(df["adx"].mean(skipna=True))
+                if np.isnan(vol): vol = 0.0
+                if np.isnan(adx): adx = 0.0
+                signals.append([vol, adx])
+            else:
+                signals.append([0.0, 0.0])
+        conn.close()
+        return np.array(signals)
+
+    def synthesize_policy_for_window(self, target_window_idx: int, lambda_val: float, use_leading_signals: bool = False) -> Dict[str, Any]:
         """
-        Returns the parameter dict to use for `target_window_idx` by running DP
+        Returns the parameter dict to use for `target_window_idx` by running ruptures
         over all windows strictly prior to `target_window_idx`.
         """
         historical_windows = [w for w in self.windows if w.window_id < target_window_idx]
@@ -244,7 +330,8 @@ class WalkForwardOptimizer:
             # First window has no history, just return a default or static baseline
             return self.windows[0].centroid_params if self.windows else {}
             
-        return self._solve_dp_switching(historical_windows, lambda_val)
+        signal_override = self.get_alternative_signal(historical_windows) if use_leading_signals else None
+        return self._solve_ruptures_switching(historical_windows, lambda_val, signal_override=signal_override)
 
     def select_lambda_cv(self) -> float:
         """
@@ -258,6 +345,29 @@ class WalkForwardOptimizer:
             print("WARNING: Not enough windows for nested CV. Defaulting to λ=2.0")
             return 2.0
             
+        # Lambda Sensitivity Grid (Phase C)
+        print("λ Sensitivity Grid (Full History):")
+        keys = sorted(list(self.windows[0].centroid_params.keys()))
+        continuous_keys = [k for k in keys if isinstance(self.windows[0].centroid_params[k], (int, float))]
+        signal_data = []
+        for w in self.windows:
+            signal_data.append([float(w.centroid_params.get(k, 0.0)) for k in continuous_keys])
+        
+        signal = np.array(signal_data)
+        if signal.shape[1] > 0 and len(signal) > 1:
+            std = signal.std(axis=0)
+            std[std == 0] = 1.0
+            signal_norm = (signal - signal.mean(axis=0)) / std
+            import ruptures as rpt
+            algo = rpt.Pelt(model="l2", min_size=1, jump=1).fit(signal_norm)
+            for lam in lambdas:
+                try:
+                    breakpoints = algo.predict(pen=lam)
+                    n_switches = len(breakpoints) - 1
+                    print(f"  λ = {lam:5.1f} -> {n_switches} switches")
+                except Exception:
+                    pass
+
         # We need a train/test split. Let's reserve the first N/2 windows as the "burn-in" 
         # and validate lambdas on the remaining windows in a walk-forward manner.
         burn_in = max(1, len(self.windows) // 2)
@@ -271,7 +381,7 @@ class WalkForwardOptimizer:
                 test_window = self.windows[test_idx]
                 
                 # Pick policy using historical windows
-                chosen_params = self._solve_dp_switching(hist_windows, lam)
+                chosen_params = self._solve_ruptures_switching(hist_windows, lam)
                 
                 # Evaluate on the test window
                 score = self._evaluate_param_on_window(chosen_params, test_window)

@@ -249,6 +249,25 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     <div class="section">
         <div class="section-header">
+            <h2>Methodology & 9-Point Reporting Checklist</h2>
+        </div>
+        <div style="font-size: 13.5px; line-height: 1.6; color: var(--text);">
+            <ol style="margin-top: 0; padding-left: 20px;">
+                <li><b>Window definition:</b> {{WINDOW_DEF}}</li>
+                <li><b>Regime feature scope:</b> {{REGIME_SCOPE}}</li>
+                <li><b>Surface mapping method:</b> {{SURFACE_METHOD}}</li>
+                <li><b>Changepoint method:</b> {{CHANGEPOINT_METHOD}}</li>
+                <li><b>DSR:</b> {{DSR_INFO}}</li>
+                <li><b>Permutation test:</b> {{PERMUTATION_TEST}}</li>
+                <li><b>Headline Sharpe/growth numbers:</b> {{HEADLINE_NUMBERS}}</li>
+                <li><b>Explicit statement:</b> {{EXPLICIT_STATEMENT}}</li>
+                <li><b>Hypotheses table:</b> {{HYPOTHESES_LOGGED}}</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-header">
             <h2>Compounded Equity Curve & Performance Trajectory</h2>
         </div>
         <div style="width: 100%; overflow-x: auto;">
@@ -1628,6 +1647,7 @@ class ReportVisualizer:
         executed_chains: List[TradeChain],
         daily_chart_data: Optional[List[Dict[str, Any]]] = None,
         output_filepath: Union[Path, str] = "hypotrader_report.html",
+        report_metadata: Optional[Dict[str, str]] = None,
     ) -> str:
         out_path = Path(output_filepath)
 
@@ -1700,6 +1720,20 @@ class ReportVisualizer:
             "TRADES_ROWS": trades_html,
             "CHART_DATA_JSON": chart_data_json,
         }
+
+        # 9-point template metadata
+        report_meta = report_metadata or {}
+        replacements.update({
+            "WINDOW_DEF": report_meta.get("WINDOW_DEF", "N/A"),
+            "REGIME_SCOPE": report_meta.get("REGIME_SCOPE", "N/A"),
+            "SURFACE_METHOD": report_meta.get("SURFACE_METHOD", "N/A"),
+            "CHANGEPOINT_METHOD": report_meta.get("CHANGEPOINT_METHOD", "N/A"),
+            "DSR_INFO": report_meta.get("DSR_INFO", "N/A"),
+            "PERMUTATION_TEST": report_meta.get("PERMUTATION_TEST", "N/A"),
+            "HEADLINE_NUMBERS": report_meta.get("HEADLINE_NUMBERS", "N/A"),
+            "EXPLICIT_STATEMENT": report_meta.get("EXPLICIT_STATEMENT", "N/A"),
+            "HYPOTHESES_LOGGED": report_meta.get("HYPOTHESES_LOGGED", "N/A"),
+        })
 
         html_content = HTML_TEMPLATE
         for key, val in replacements.items():
@@ -1927,40 +1961,62 @@ def generate_wfo_charts(db_path: str, output_dir: str):
     plt.tight_layout()
     plt.savefig(out_path / "5_mode_comparison.png", dpi=150)
     plt.close()
-    
-    # 6. Overlaid Static vs Adaptive vs Oracle (Simulated Brownian Motion to match reported Sharpe)
+    # 6. Exact Out-of-Sample Equity Curves
     plt.figure(figsize=(12, 6))
-    np.random.seed(42)
-    days = 60
-    t = np.arange(days)
     
-    # Static & Adaptive (Sharpe 1.58 -> daily mean = 1.58 / sqrt(252) * std)
-    std_dev = 0.01
-    mean_ret_baseline = (1.58 / np.sqrt(252)) * std_dev
-    mean_ret_oracle = (3.38 / np.sqrt(252)) * std_dev
-    
-    # Generate cumulative paths
-    static_rets = np.random.normal(mean_ret_baseline, std_dev, days)
-    adaptive_rets = static_rets.copy()
-    adaptive_rets[10:20] += np.random.normal(0, 0.005, 10) # Slight deviation
-    oracle_rets = np.random.normal(mean_ret_oracle, std_dev, days)
-    
-    static_eq = np.cumprod(1 + static_rets)
-    adaptive_eq = np.cumprod(1 + adaptive_rets)
-    oracle_eq = np.cumprod(1 + oracle_rets)
-    
-    plt.plot(t, static_eq, label=f'Static Baseline (Sharpe 1.58)', color='blue')
-    plt.plot(t, adaptive_eq, label=f'Adaptive Policy (Sharpe 1.58)', color='orange', linestyle='--')
-    plt.plot(t, oracle_eq, label=f'Oracle Bound (Sharpe 3.38)', color='green')
-    
-    plt.fill_between(t, static_eq * 0.98, static_eq * 1.02, color='blue', alpha=0.1)
-    
-    plt.title("Overlaid Out-of-Sample Equity Curves (Simulated from WFO Stats)")
-    plt.xlabel("Test Windows (Days)")
-    plt.ylabel("Cumulative Equity")
-    plt.legend()
-    plt.tight_layout()
+    returns_file = out_path / "oos_returns.csv"
+    if returns_file.exists():
+        import pandas as pd
+        df_rets = pd.read_csv(returns_file, index_col=0, parse_dates=True)
+        
+        # compute sharpe for labels dynamically
+        def get_sharpe(rets):
+            mean_r = rets.mean()
+            std_r = rets.std(ddof=1)
+            return (mean_r / std_r) * np.sqrt(252) if std_r > 0 else 0.0
+            
+        sharpe_stat = get_sharpe(df_rets['static'])
+        sharpe_adap = get_sharpe(df_rets['adaptive'])
+        sharpe_orac = get_sharpe(df_rets['oracle'])
+        
+        static_eq = (1 + df_rets['static']).cumprod()
+        adaptive_eq = (1 + df_rets['adaptive']).cumprod()
+        oracle_eq = (1 + df_rets['oracle']).cumprod()
+        
+        plt.plot(static_eq.index, static_eq, label=f'Static Baseline (Sharpe {sharpe_stat:.3f})', color='blue')
+        plt.plot(adaptive_eq.index, adaptive_eq, label=f'Adaptive Policy (Sharpe {sharpe_adap:.3f})', color='orange', linestyle='--')
+        plt.plot(oracle_eq.index, oracle_eq, label=f'Oracle Bound (Sharpe {sharpe_orac:.3f})', color='green')
+        
+        plt.fill_between(static_eq.index, static_eq * 0.98, static_eq * 1.02, color='blue', alpha=0.1)
+        
+        switch_file = out_path / "switch_dates.txt"
+        if switch_file.exists():
+            with open(switch_file, "r") as f:
+                switch_dates = [pd.to_datetime(l.strip()) for l in f.readlines() if l.strip()]
+            
+            # Plot marker for each switch date
+            for d in switch_dates:
+                idx = adaptive_eq.index[adaptive_eq.index >= d]
+                if len(idx) > 0:
+                    plt.scatter(idx[0], adaptive_eq.loc[idx[0]], color='red', marker='*', s=80, zorder=5)
+            
+            # Add proxy for legend
+            if switch_dates:
+                plt.scatter([], [], color='red', marker='*', s=80, label='Policy Switch')
+        
+        plt.title("Overlaid Out-of-Sample Equity Curves (Exact Real Returns)")
+        plt.xlabel("Date")
+        plt.ylabel("Cumulative Equity")
+        plt.legend()
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+    else:
+        plt.text(0.5, 0.5, 'oos_returns.csv not found. Run test script first.', ha='center', va='center')
+        plt.title("Exact Equity Curves")
+        plt.tight_layout()
+        
     plt.savefig(out_path / "6_equity_curves.png", dpi=150)
+    plt.close()
     plt.close()
     
     conn.close()

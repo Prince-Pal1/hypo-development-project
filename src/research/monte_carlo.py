@@ -71,11 +71,12 @@ def permutation_test_regime_effect(
     returns_regime_b: np.ndarray,
     metric_func: Callable[[np.ndarray], float],
     num_permutations: int = 1000,
+    block_size: int = 10,
     seed: Optional[int] = None
 ) -> Tuple[float, float]:
     """
     Check whether the apparent performance gap between two regimes is statistically significant
-    by shuffling which sub-interval gets which regime label.
+    by shuffling which sub-interval gets which regime label, using blocks to preserve autocorrelation.
     Returns (observed_diff, p_value).
     """
     if seed is not None:
@@ -86,13 +87,16 @@ def permutation_test_regime_effect(
     observed_diff = abs(metric_a - metric_b)
     
     combined = np.concatenate([returns_regime_a, returns_regime_b])
+    n = len(combined)
     n_a = len(returns_regime_a)
+    
+    # Pre-compute blocks
+    blocks = [combined[i:i+block_size] for i in range(0, n, block_size)]
     
     count_exceed = 0
     for _ in range(num_permutations):
-        # We need a fresh copy to shuffle
-        permuted = combined.copy()
-        np.random.shuffle(permuted)
+        np.random.shuffle(blocks)
+        permuted = np.concatenate(blocks)
         
         sim_a = permuted[:n_a]
         sim_b = permuted[n_a:]

@@ -68,6 +68,7 @@ def evaluate_params_on_window(
         
         signal, _ = strategy.evaluate_day_context(target_date, day_df, account_equity=account_equity)
         if signal is None or not signal.risk_sanitized:
+            daily_returns.append(0.0) # Pad no-trade days with 0.0 return
             continue
             
         trade = simulator.simulate_day(signal, day_df, window.sydney_open_utc)
@@ -77,13 +78,24 @@ def evaluate_params_on_window(
         account_equity += trade.pnl_net
 
     if len(daily_returns) < 3:
-        return 0.0, pd.Series(dtype=float)
+        return 0.0, 0.0, 0.0, 0, pd.Series(dtype=float)
 
     arr = np.array(daily_returns)
     mean_ret = float(np.mean(arr))
     std_ret = float(np.std(arr, ddof=1))
     sharpe = (mean_ret / std_ret) * np.sqrt(252) if std_ret > 0 else 0.0
-    return sharpe, pd.Series(daily_returns)
+    
+    ann_ret = mean_ret * 252
+    
+    # Calculate Max Drawdown
+    cum_returns = np.cumprod(1 + arr)
+    running_max = np.maximum.accumulate(cum_returns)
+    drawdowns = (running_max - cum_returns) / running_max
+    max_dd = float(np.max(drawdowns)) if len(drawdowns) > 0 else 0.0
+    
+    trades_count = int(np.sum(arr != 0.0))
+    
+    return sharpe, ann_ret, max_dd, trades_count, pd.Series(daily_returns)
 
 def run_walk_forward_validation():
     print("=== Walk-Forward Validation: Static vs Adaptive vs Oracle ===")
@@ -118,9 +130,8 @@ def run_walk_forward_validation():
         def objective(params):
             start_d = dt.datetime.strptime(sub_interval_start, "%Y-%m-%d").date()
             end_d = dt.datetime.strptime(sub_interval_end, "%Y-%m-%d").date()
-            sharpe, _ = evaluate_params_on_window(params, start_d, end_d, df_5m, df_1m)
-            # We return dummy ann_ret, max_dd, trades_count as they are just logged
-            return sharpe, 0.0, 0.0, 1
+            sharpe, ann_ret, max_dd, trades_count, _ = evaluate_params_on_window(params, start_d, end_d, df_5m, df_1m)
+            return sharpe, ann_ret, max_dd, trades_count
             
         return OptunaStudyEngine(
             study_name=study_name,
@@ -163,12 +174,13 @@ def run_walk_forward_validation():
     
     switch_count = 0
     last_adaptive_params = None
+    switch_dates = []
     
     for t_window in test_windows:
         print(f"\n--- Testing Window {t_window.window_id} ({t_window.start_date} to {t_window.end_date}) ---")
         
         # Static
-        _, rets = evaluate_params_on_window(static_params, t_window.start_date, t_window.end_date, df_5m, df_1m)
+        _, _, _, _, rets = evaluate_params_on_window(static_params, t_window.start_date, t_window.end_date, df_5m, df_1m)
         static_returns = pd.concat([static_returns, rets])
         
         # Adaptive
@@ -176,15 +188,16 @@ def run_walk_forward_validation():
         print(f"Adaptive Params selected: {adaptive_params}")
         if last_adaptive_params is not None and adaptive_params != last_adaptive_params:
             switch_count += 1
+            switch_dates.append(t_window.start_date)
         last_adaptive_params = adaptive_params
         
-        _, rets = evaluate_params_on_window(adaptive_params, t_window.start_date, t_window.end_date, df_5m, df_1m)
+        _, _, _, _, rets = evaluate_params_on_window(adaptive_params, t_window.start_date, t_window.end_date, df_5m, df_1m)
         adaptive_returns = pd.concat([adaptive_returns, rets])
         
         # Oracle
         oracle_params = t_window.centroid_params
         print(f"Oracle Params (perfect hindsight): {oracle_params}")
-        _, rets = evaluate_params_on_window(oracle_params, t_window.start_date, t_window.end_date, df_5m, df_1m)
+        _, _, _, _, rets = evaluate_params_on_window(oracle_params, t_window.start_date, t_window.end_date, df_5m, df_1m)
         oracle_returns = pd.concat([oracle_returns, rets])
         
     print("\n=== Walk-Forward Out-Of-Sample Results ===")
@@ -215,6 +228,20 @@ def run_walk_forward_validation():
     report_performance("Static Baseline", static_returns)
     report_performance("Adaptive Policy", adaptive_returns)
     report_performance("Oracle Bound   ", oracle_returns)
+    
+    # Save the real returns to disk for the visualizer
+    out_dir = Path("/Users/prince/strategy_development/hypotheses/adaptive_range_scope")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    df_returns = pd.DataFrame({
+        'static': static_returns,
+        'adaptive': adaptive_returns,
+        'oracle': oracle_returns
+    })
+    df_returns.to_csv(out_dir / "oos_returns.csv")
+    
+    with open(out_dir / "switch_dates.txt", "w") as f:
+        for d in switch_dates:
+            f.write(f"{d}\n")
 
 if __name__ == "__main__":
     run_walk_forward_validation()
