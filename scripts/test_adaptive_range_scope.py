@@ -164,10 +164,17 @@ def run_walk_forward_validation():
         print("Not enough windows to perform Walk-Forward.")
         return
         
-    best_lambda = optimizer.select_lambda_cv()
-    
-    burn_in_windows = max(1, len(optimizer.windows) // 2)
+    # Define burn-in cutoff strictly once, pass to lambda CV to ensure no OOS overlap leakage
+    burn_in_windows = 12
     test_windows = optimizer.windows[burn_in_windows:]
+    
+    print(f"\n--- Walk-Forward Out-Of-Sample Testing ---")
+    print(f"Total Windows: {len(optimizer.windows)}")
+    print(f"Burn-in Windows (Static/Ignored): {burn_in_windows}")
+    print(f"Test Windows (OOS): {len(test_windows)}")
+
+    # 1. Lambda Selection (Nested CV) - Passed the same burn_in_windows to avoid OOS leakage
+    best_lambda = optimizer.select_lambda_cv(burn_in_windows=burn_in_windows)
     
     # 1. Static Baseline
     # Use the centroid of the very first window (or burn-in) for the entire test set

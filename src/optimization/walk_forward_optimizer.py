@@ -357,7 +357,7 @@ class WalkForwardOptimizer:
         signal_override = self.get_alternative_signal(historical_windows) if use_leading_signals else None
         return self._solve_ruptures_switching(historical_windows, lambda_val, signal_override=signal_override)
 
-    def select_lambda_cv(self) -> float:
+    def select_lambda_cv(self, burn_in_windows: int = 12) -> float:
         """
         Selects λ via nested cross-validation on the training windows.
         Since WFO is sequential, we do a nested walk-forward over the historical windows.
@@ -410,9 +410,8 @@ class WalkForwardOptimizer:
                 except Exception:
                     pass
 
-        # We need a train/test split. Let's reserve the first N/2 windows as the "burn-in" 
-        # and validate lambdas on the remaining windows in a walk-forward manner.
-        burn_in = max(1, len(self.windows) // 2)
+        # Use the passed-in burn_in_windows cutoff to prevent nested-CV leakage into OOS
+        burn_in = max(1, burn_in_windows)
         
         lambda_scores = {lam: 0.0 for lam in lambdas}
         

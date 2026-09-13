@@ -8,14 +8,14 @@ We evaluated a Dynamic Programming (DP) policy against a Walk-Forward out-of-sam
 Our hypothesis was that a regime-adaptive approach using discrete regime clusters (plateau centroids) and dynamic programming switching costs would outperform a single static parameter set.
 
 ## Results
-- **Static Baseline**: Out-of-Sample Sharpe 0.212 (95% CI: -1.808 to 1.810)
-- **Adaptive Policy**: Out-of-Sample Sharpe 0.955 (95% CI: -1.347 to 2.611)
-- **Oracle Bound**: Out-of-Sample Sharpe 2.494 (95% CI: 1.066 to 3.980)
+- **Static Baseline**: Out-of-Sample Sharpe 0.222 (95% CI: -1.694 to 1.592)
+- **Adaptive Policy**: Out-of-Sample Sharpe 0.636 (95% CI: -1.301 to 2.154)
+- **Oracle Bound**: Out-of-Sample Sharpe 2.040 (95% CI: 0.619 to 3.154)
 
 ### Findings
-1. **Adaptive Edge Overlap-Corrected**: After correcting the 50-day window overlap leakage to strictly evaluate the 10-day step periods, the sample size decreased to 278 strictly independent test days. The Adaptive Policy (0.955) still outperforms the Static Baseline (0.212). However, the statistical significance has dropped: Permutation test showed a Two-Sided Gap of 0.743 (p=0.5630), and Paired Bootstrap Difference 95% CI is [-1.192, 2.863]. The edge exists but the sample is too small/noisy to confirm structural significance at the 95% confidence level. 
-2. **Oracle Bound**: The Oracle performance demonstrates a massive theoretical alpha ceiling (Sharpe 2.494, p=0.0512) if regimes could be predicted perfectly. The gap between Adaptive and Oracle represents the theoretical maximum value of a better predictor.
-3. **Switch Counts**: The policy experienced 22 Structural Regime Switches and 22 Parameter Value Changes.
+1. **Adaptive Edge Overlap-Corrected & Sample Expanded**: After correcting the lambda nested-CV leakage and expanding the True OOS sample size to N=410 days (by fixing `burn_in_windows=12`), the true structural reality of the reactive policy became clear. As the sample size grew, the Adaptive Sharpe dropped from 0.955 to 0.636, and the Permutation p-value worsened from 0.5630 to 0.7270 (Two-Sided Gap: 0.414). The point estimate did not hold up; the purely reactive regime DP solver is failing to capture a persistent forward-looking edge.
+2. **Oracle Bound**: The Oracle performance remains theoretically strong (Sharpe 2.040), though its p-value also loosened slightly to 0.0888 across the wider 410-day test. The gap remains massive, but capturing it requires leading (forward-looking) predictors rather than lagging regime centroids.
+3. **Switch Counts**: The policy experienced 33 Structural Regime Switches and 33 Parameter Value Changes over the extended window.
 
 ## Guardrails Confirmed
 - [x] No Look-Ahead: Sub-interval window boundaries were perfectly embargoed.
